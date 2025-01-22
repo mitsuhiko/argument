@@ -72,6 +72,7 @@
 //! need information that a parser just should not take care of.
 use std::ffi::{OsStr, OsString};
 use std::fmt;
+use std::mem::replace;
 use std::path::Path;
 use std::str::{from_utf8, from_utf8_unchecked, FromStr, Utf8Error};
 
@@ -190,15 +191,6 @@ impl Param {
     }
 }
 
-/// An internal state indicator for the parser
-#[derive(Debug)]
-enum State {
-    Default,
-    ExplicitOptionValue,
-    ShortOptChain(usize),
-    ArgPause,
-}
-
 /// Parser behavior flags.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Flag {
@@ -236,6 +228,14 @@ impl Flag {
     }
 }
 
+/// An internal state indicator for the parser
+enum State {
+    Default,
+    ExplicitOptionValue,
+    ShortOptChain(usize),
+    ArgPause,
+}
+
 /// A low-level command line parser for POSIX command lines.
 ///
 /// This parser steps through an iterator of command line arguments
@@ -271,6 +271,15 @@ pub struct Parser<'it> {
     prog: Option<OsString>,
     state: State,
     flags: u8,
+}
+
+impl fmt::Debug for Parser<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Parser")
+            .field("prog", &self.prog)
+            .field("finished", &self.finished())
+            .finish()
+    }
 }
 
 impl<'it> Parser<'it> {
@@ -475,10 +484,7 @@ impl<'it> Parser<'it> {
         V: FromStr,
         V::Err: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
     {
-        Ok(match self.optional_string_value()? {
-            Some(value) => Some(parse_string(value)?),
-            None => None,
-        })
+        self.optional_string_value()?.map(parse_string).transpose()
     }
 
     /// Parse the current argument as an optional value ensuring it's a valid unicode string.
@@ -600,10 +606,8 @@ impl<'it> Parser<'it> {
 
     /// Moves ahead one argument and resets the internal state.
     fn next_arg_and_reset_state(&mut self) -> Option<OsString> {
-        let rv = self.current_arg.take();
-        self.current_arg = self.args.next();
         self.state = State::Default;
-        rv
+        replace(&mut self.current_arg, self.args.next())
     }
 
     /// Sets the state for arg pause and returns an arg param.
