@@ -1,8 +1,20 @@
 use std::ffi::OsString;
 use std::net::{IpAddr, Ipv4Addr};
-use std::os::unix::ffi::OsStringExt;
 
 use argument_parser::{Error, Flag, Param, Parser};
+
+fn make_invalid_unicode_os_string() -> OsString {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStringExt;
+        OsString::from_vec(vec![0xff, 0xff])
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStringExt;
+        OsString::from_wide(&[0xD800]) // Invalid UTF-16 surrogate
+    }
+}
 
 #[test]
 fn test_basic() -> Result<(), Error> {
@@ -318,7 +330,7 @@ fn test_weird_args() -> Result<(), Error> {
 #[test]
 fn test_invalid_unicode() -> Result<(), Error> {
     // Create an OsString with invalid unicode bytes
-    let invalid_unicode = OsString::from_vec(vec![0xFF, 0xFF]);
+    let invalid_unicode = make_invalid_unicode_os_string();
 
     // Test invalid unicode in positional argument
     let mut parser = Parser::from_args([invalid_unicode.clone()].into_iter());
@@ -365,7 +377,8 @@ fn test_invalid_unicode() -> Result<(), Error> {
     assert_eq!(parser.raw_value()?, invalid_unicode); // But raw value works
 
     // Test invalid unicode in option name - should error
-    let invalid_opt = OsString::from_vec(vec![b'-', 0xFF, 0xFF]);
+    let mut invalid_opt = OsString::from("-");
+    invalid_opt.push(make_invalid_unicode_os_string());
     let mut parser = Parser::from_args([invalid_opt].into_iter());
     assert!(parser.param().is_err());
 
