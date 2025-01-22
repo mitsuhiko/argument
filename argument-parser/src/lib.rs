@@ -46,35 +46,59 @@
 //! # Behavior
 //!
 //! This crate follows POSIX behavior with getopt style handling as much as
-//! possible.  This has some consequences if you are used to clap or other
-//! libraries.  In particular short arguments do not take `=` to separate from
-//! the value.  Whereas in clap any short option (eg: `-x`) will accept an equal
-//! sign to separate from the value (eg: `-x=42`).  In this crate this will lead
-//! to the equal sign being part of the value.  If you don't want that, you can
-//! change it with [`Flag::StripShortOptionEqualSign`] though this is strongly
-//! discouraged.
+//! possible.  In particular short arguments do not take `=` to separate from
+//! the value (eg: `-x42` represents a value of `42` and `-x=42` a value of
+//! `=42`).  If you don't want that, you can change it with
+//! [`Flag::StripShortOptionEqualSign`] though this is strongly discouraged.
 //!
 //! The special `--` argument is handled automatically for you but the behavior
-//! can be disabled by disabling [`Flag::HandleDoubleDash`].
+//! can be disabled by un-setting [`Flag::HandleDoubleDash`].
 //!
 //! By default numeric options are valid options, but if you don't expect to have
-//! any you can disable that with [`Flag::DisableNumericOptions`] in which case
-//! they are handled like normal arguments.
+//! any you can disable that by setting [`Flag::DisableNumericOptions`] in which
+//! case they are handled like normal arguments.
 //!
 //! By default options and arguments can be freely mixed, but this can be
 //! changed by setting [`Flag::DisableOptionsAfterArgs`].  With this flag set
 //! the first time a position argument is encountered, the options are disabled.
 //!
-//! # Limitations
+//! # General Parsing Rules
+//!
+//! * You can at any point parse a [`value`](Parser::value).  It will fail
+//!   if there are no more arguments pending (you can use
+//!   [`Parser::finished`] to check if you reached the end).
+//! * When parsing a [`param`](Parser::param) it only parses the name and
+//!   pauses before the value.  Consequently when parsing a positional
+//!   argument it pauses just before the actual value is parsed.
+//! * When entering short options (eg: `-f`) the parser will prevent
+//!   raw parameter access until the rest of the argument is parsed.
+//! * When `--` is encountered while parsing parameters, it swallows that
+//!   argument and flips the [`Flag::OptionsEnabled`] flag to `true`.  If you
+//!   don't want that you can un-set the [`Flag::HandleDoubleDash`] flag.
+//! * For complex parsing you can try to parse raw arguments with
+//!   [`peek_raw_arg`](Parser::peek_raw_arg) and
+//!   [`raw_arg`](Parser::raw_arg) before falling back the regular
+//!   parsing methods.
+//! * Option names must be valid unicode.
+//! * All the flags and options of the parser can be changed at any point
+//!   as parsing takes place.  For instance you can turn on and off the handling
+//!   of numeric options as you keep parsing.
+//!
+//! # Limitations and Error Handling
 //!
 //! This crate is almost comically bad at error reporting and proudly so.  That's
 //! not because error messages are not important, but because good error messages
 //! need information that a parser just should not take care of.
+//!
+//! When the [`Parser`] encounters an error it's not recoverable and the parser is
+//! left in an undefined state (eg: an argument might be lost, future calls
+//! might fail).  For instance it's not safe to try to call `value::<i32>()` and
+//! fall back to `string_value()` if parsing fails.
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::mem::replace;
 use std::path::Path;
-use std::str::{from_utf8, from_utf8_unchecked, FromStr, Utf8Error};
+use std::str::{from_utf8, from_utf8_unchecked, FromStr};
 
 /// Represents a parsing error.
 #[derive(Debug)]
@@ -83,11 +107,7 @@ pub enum Error {
     /// Emitted when a value was expected but none was there.
     MissingValue,
     /// Happens when parsing a parameter as string and the string is invalid unicode.
-    InvalidUnicode {
-        value: OsString,
-        valid_up_to: usize,
-        error_len: Option<usize>,
-    },
+    InvalidUnicode(OsString),
     /// Happens when parsing a parameter into another type and parsing failed.
     ///
     /// This holds on to the source parsing error.
@@ -98,11 +118,11 @@ pub enum Error {
     /// Created by [`Param::into_unexpected_error`] for positional arguments.
     UnexpectedArgument,
     /// Created by [`Param::into_unexpected_error`] for short options.
-    UnexpectedShortOption { option: char },
+    UnexpectedShortOption(char),
     /// Created by [`Param::into_unexpected_error`] for long options.
-    UnexpectedLongOption { option: String },
+    UnexpectedLongOption(String),
     /// A custom message
-    Custom { message: String },
+    Custom(String),
 }
 
 impl fmt::Display for Error {
@@ -113,9 +133,9 @@ impl fmt::Display for Error {
             Error::InvalidUnicode { .. } => write!(f, "invalid unicode for string argument")?,
             Error::InvalidValue { value, .. } => write!(f, "invalid value ({})", value)?,
             Error::UnexpectedArgument => write!(f, "unexpected argument")?,
-            Error::UnexpectedShortOption { option } => write!(f, "unexpected option -{}", option)?,
-            Error::UnexpectedLongOption { option } => write!(f, "unexpected option --{}", option)?,
-            Error::Custom { message } => write!(f, "{}", message)?,
+            Error::UnexpectedShortOption(option) => write!(f, "unexpected option -{}", option)?,
+            Error::UnexpectedLongOption(option) => write!(f, "unexpected option --{}", option)?,
+            Error::Custom(message) => write!(f, "{}", message)?,
         }
         Ok(())
     }
@@ -140,7 +160,7 @@ impl<'s> From<&'s str> for Error {
 
 impl From<String> for Error {
     fn from(message: String) -> Error {
-        Error::Custom { message }
+        Error::Custom(message)
     }
 }
 
@@ -184,8 +204,8 @@ impl Param {
     /// Consumes the parameter and creates an unexpected error.
     pub fn into_unexpected_error(self) -> Error {
         match self {
-            Param::Short(option) => Error::UnexpectedShortOption { option },
-            Param::Long(option) => Error::UnexpectedLongOption { option },
+            Param::Short(option) => Error::UnexpectedShortOption(option),
+            Param::Long(option) => Error::UnexpectedLongOption(option),
             Param::Arg => Error::UnexpectedArgument,
         }
     }
@@ -241,34 +261,7 @@ enum State {
 /// This parser steps through an iterator of command line arguments
 /// parsing them one after another.  It maintains internal state to
 /// avoid accidental mis-parsing if the user invokes parsing methods in the
-/// wrong order.
-///
-/// Some general parsing rules:
-///
-/// * You can at any point parse a [`value`](Self::value).  It will fail
-///   if there are no more arguments pending (you can use
-///   [`finished`](Self::finished) to check if you reached the end).
-/// * When parsing a [`param`](Self::param) it only parses the name and
-///   pauses before the value.  Consequently when parsing a positional
-///   argument it pauses just before the actual value is parsed.
-/// * When entering short options (eg: `-f`) the parser will prevent
-///   raw parameter access until the rest of the argument is parsed.
-/// * When `--` is encountered it swallows that argument and flips the
-///   [`Flag::OptionsEnabled`] flag to `true`.  If you
-///   don't want that you can change it with the [`Flag::HandleDoubleDash`] flag.
-/// * You can always manually control the [`Flag::OptionsEnabled`] flag.
-/// * For complex parsing you can try to parse raw arguments with
-///   [`peek_raw_arg`](Self::peek_raw_arg) and
-///   [`raw_arg`](Self::raw_arg) before falling back the regular
-///   parsing methods.
-/// * Option names must be valid unicode.
-/// * All the flags and options of the parser can be changed as parsing
-///   takes place.  For instance you can turn on and off the handling of
-///   numeric options.
-/// * When the parser encounters an error it's not recoverable and the parser
-///   is left in an undefined state.  For instance it's not safe to try to
-///   call `value::<i32>()` and fall back to `string_value()` if parsing
-///   fails.
+/// wrong order.  For basic instructions consult the crate documentation.
 pub struct Parser<'it> {
     args: Box<dyn Iterator<Item = OsString> + 'it>,
     current_arg: Option<OsString>,
@@ -355,6 +348,8 @@ impl<'it> Parser<'it> {
     /// lost.
     ///
     /// For simplicity reasons, parameter names are always valid unicode strings.
+    ///
+    /// While parsing for parameters, `--` is automatically handled unless disabled.
     pub fn param(&mut self) -> Result<Option<Param>, Error> {
         loop {
             let arg = match self.state {
@@ -442,7 +437,7 @@ impl<'it> Parser<'it> {
     /// check with [`finished`](Self::finished) if there are more arguments.
     ///
     /// Lastly calling this method will always parse a value, even if it looks
-    /// like an option.  If you don't want that, you can use
+    /// like an option or end of options marker.  If you don't want that, you can use
     /// [`looks_at_value`](Self::looks_at_value).  This is a basic heuristic
     /// that will return `false` if what it's looking at currently looks like an
     /// option or the end of the command line was reached.
@@ -470,7 +465,7 @@ impl<'it> Parser<'it> {
     /// this method to accept file names and then convert it into a `PathBuf` or
     /// similar.
     pub fn raw_value(&mut self) -> Result<OsString, Error> {
-        self.raw_optional_value()
+        self.optional_raw_value()
             .or_else(|| self.next_arg_and_reset_state())
             .ok_or(Error::MissingValue)
     }
@@ -496,7 +491,7 @@ impl<'it> Parser<'it> {
     /// This is like [`optional_value`](Self::optional_value) but avoids an
     /// extra copy.
     pub fn optional_string_value(&mut self) -> Result<Option<String>, Error> {
-        match self.raw_optional_value() {
+        match self.optional_raw_value() {
             Some(value) => os_string_into_string(value).map(Some),
             None => Ok(None),
         }
@@ -506,7 +501,7 @@ impl<'it> Parser<'it> {
     ///
     /// See [`optional_value`](Self::optional_value) and
     /// [`raw_value`](Self::raw_value) for more details.
-    pub fn raw_optional_value(&mut self) -> Option<OsString> {
+    pub fn optional_raw_value(&mut self) -> Option<OsString> {
         match self.state {
             State::Default | State::ArgPause => None,
             State::ExplicitOptionValue => self.next_arg_and_reset_state(),
@@ -656,7 +651,7 @@ fn os_str_char_at(s: &OsStr, idx: usize) -> Result<Option<char>, Error> {
     let prefix = match from_utf8(prefix) {
         Ok(prefix) => prefix,
         Err(err) => match err.valid_up_to() {
-            0 => return Err(invalid_unicode_error(s.to_owned(), Some(err), idx)),
+            0 => return Err(Error::InvalidUnicode(s.to_owned())),
             n => unsafe { from_utf8_unchecked(&prefix[..n]) },
         },
     };
@@ -666,7 +661,7 @@ fn os_str_char_at(s: &OsStr, idx: usize) -> Result<Option<char>, Error> {
 /// Splits a OsStr at a point into a prefix that is utf-8, and the rest.
 fn os_str_split_utf8_prefix(s: &OsStr, point: usize) -> Result<(&str, &OsStr), Error> {
     let b = s.as_encoded_bytes();
-    let s1 = from_utf8(&b[..point]).map_err(|err| invalid_unicode_error(s.into(), Some(err), 0))?;
+    let s1 = from_utf8(&b[..point]).map_err(|_| Error::InvalidUnicode(s.into()))?;
     let s2 = &b[point..];
     // SAFETY: because s1 is valid utf-8 as checked per from_utf8, we
     // can safely restore the rest of the OsStr as OsStr.
@@ -682,17 +677,5 @@ fn os_str_strip_prefix<'s>(s: &'s OsStr, prefix: &str) -> &'s OsStr {
 
 /// Convert an OsString into a string.
 fn os_string_into_string(s: OsString) -> Result<String, Error> {
-    s.into_string().map_err(|value| {
-        let err = from_utf8(value.as_encoded_bytes()).err();
-        invalid_unicode_error(value, err, 0)
-    })
-}
-
-/// Make an invalid unicode error, optionally with an offset.
-fn invalid_unicode_error(value: OsString, err: Option<Utf8Error>, offset: usize) -> Error {
-    Error::InvalidUnicode {
-        value,
-        valid_up_to: err.map_or(0, |x| x.valid_up_to()) + offset,
-        error_len: err.and_then(|x| x.error_len()),
-    }
+    s.into_string().map_err(Error::InvalidUnicode)
 }
