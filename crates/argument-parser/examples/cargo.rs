@@ -1,6 +1,10 @@
 //! A very partial unfaithful implementation of cargo's command line.
 //!
 //! This showcases some hairier patterns, like subcommands and custom value parsing.
+//!
+//! This example is taken from the MIT licensed cargo example in lexopt
+//!
+//! Copyright 2022 Jan Verbeek <jan.verbeek@posteo.nl>
 
 use std::path::PathBuf;
 use std::str::FromStr;
