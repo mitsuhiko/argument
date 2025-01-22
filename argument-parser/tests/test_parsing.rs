@@ -38,7 +38,7 @@ fn test_value_parsing() -> Result<(), Error> {
 
     assert_eq!(parser.value::<String>()?, "a-string");
     assert_eq!(parser.value::<i32>()?, 42);
-    assert_eq!(parser.value::<bool>()?, true);
+    assert!(parser.value::<bool>()?);
     assert_eq!(parser.value::<IpAddr>()?, IpAddr::V4(Ipv4Addr::LOCALHOST));
     assert!(parser.finished());
 
@@ -173,7 +173,7 @@ fn test_looks_at_value() -> Result<(), Error> {
         args: &[&str],
         no_num_opts: bool,
     ) -> Result<(usize, Vec<String>, Vec<String>), Error> {
-        let mut parser = Parser::from_args(args.into_iter());
+        let mut parser = Parser::from_args(args.iter());
         if no_num_opts {
             parser.set_flag(Flag::DisableNumericOptions, true);
         }

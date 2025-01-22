@@ -58,7 +58,7 @@ fn cli() -> Result<(), Error> {
                 }
             }
         } else {
-            return Err(param.into_unexpected_error().into());
+            return Err(param.into_unexpected_error());
         }
     }
 
@@ -91,7 +91,7 @@ fn install(settings: GlobalSettings, mut parser: Parser) -> Result<(), Error> {
             println!("cargo install [OPTIONS] CRATE");
             std::process::exit(0);
         } else {
-            return Err(param.into_unexpected_error().into());
+            return Err(param.into_unexpected_error());
         }
     }
 

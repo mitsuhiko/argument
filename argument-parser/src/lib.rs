@@ -357,7 +357,7 @@ impl<'it> Parser<'it> {
                 }
                 State::ShortOptChain(ref mut pos) => {
                     let arg = self.current_arg.as_deref().unwrap();
-                    return match os_str_char_at(&arg, *pos)? {
+                    return match os_str_char_at(arg, *pos)? {
                         None => {
                             self.next_arg_and_reset_state();
                             continue;
@@ -385,7 +385,7 @@ impl<'it> Parser<'it> {
                 continue;
             } else if arg_bytes.starts_with(b"--") {
                 let option_name = if let Some(ind) = arg_bytes.iter().position(|&b| b == b'=') {
-                    let (prefix, arg_value) = os_str_split_utf8_prefix(&arg, ind + 1)?;
+                    let (prefix, arg_value) = os_str_split_utf8_prefix(arg, ind + 1)?;
                     let prefix = prefix[2..prefix.len() - 1].to_string();
                     self.current_arg = Some(arg_value.to_owned());
                     self.state = State::ExplicitOptionValue;
@@ -605,7 +605,7 @@ impl<'it> Parser<'it> {
     fn considered_opt(&self, s: &OsStr) -> bool {
         let arg_bytes = s.as_encoded_bytes();
         arg_bytes.len() > 1
-            && arg_bytes.get(0) == Some(&b'-')
+            && arg_bytes.first() == Some(&b'-')
             && (!self.get_flag(Flag::DisableNumericOptions)
                 || arg_bytes.get(1).map_or(true, |x| !x.is_ascii_digit()))
     }
