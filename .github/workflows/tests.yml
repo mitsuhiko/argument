@@ -1,0 +1,49 @@
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  test-latest:
+    name: Test on Latest Stable
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Check
+        run: make check
+      - name: Test
+        run: make test
+
+  test-nightly:
+    name: Test on nightly
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+      - uses: Swatinem/rust-cache@v2
+      - name: Wipe Cargo.lock
+        run: rm Cargo.lock
+      - name: Check
+        run: make check
+      - name: Test
+        run: make test
+  
+  test-windows:
+    name: Test on Windows
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: make test
