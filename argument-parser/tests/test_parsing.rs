@@ -419,3 +419,17 @@ fn test_raw_arg_options_handling() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[test]
+fn test_raw_arg_options_peeking() -> Result<(), Error> {
+    let mut parser = Parser::from_args(["foo", "-xbar", "blah"].into_iter());
+    assert_eq!(parser.param()?, Some(Param::Arg));
+    assert_eq!(parser.peek_raw_arg().and_then(|x| x.to_str()), Some("foo"));
+    assert_eq!(parser.string_value()?, "foo");
+    assert_eq!(parser.param()?, Some(Param::Short('x')));
+    assert!(parser.peek_raw_arg().is_none());
+    assert_eq!(parser.string_value()?, "bar");
+    assert_eq!(parser.peek_raw_arg().and_then(|x| x.to_str()), Some("blah"));
+    assert_eq!(parser.string_value()?, "blah");
+    Ok(())
+}

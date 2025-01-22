@@ -265,6 +265,10 @@ enum State {
 /// * All the flags and options of the parser can be changed as parsing
 ///   takes place.  For instance you can turn on and off the handling of
 ///   numeric options.
+/// * When the parser encounters an error it's not recoverable and the parser
+///   is left in an undefined state.  For instance it's not safe to try to
+///   call `value::<i32>()` and fall back to `string_value()` if parsing
+///   fails.
 pub struct Parser<'it> {
     args: Box<dyn Iterator<Item = OsString> + 'it>,
     current_arg: Option<OsString>,
@@ -645,28 +649,25 @@ where
 /// Gets a single unicode character at an offset in the OsStr.
 fn os_str_char_at(s: &OsStr, idx: usize) -> Result<Option<char>, Error> {
     let prefix = match s.as_encoded_bytes().get(idx..) {
-        Some(prefix) => prefix.get(..4).unwrap_or(prefix),
+        Some(b) => b.get(..4).unwrap_or(b),
         None => return Ok(None),
     };
+    // SAFETY: up to the given byte, we know the utf-8 is valid
     let prefix = match from_utf8(prefix) {
         Ok(prefix) => prefix,
-        Err(err) => {
-            if err.valid_up_to() == 0 {
-                return Err(invalid_unicode_error(s.to_owned(), Some(err), idx));
-            }
-            // SAFETY: up to the given byte, we know the utf-8 is valid
-            unsafe { from_utf8_unchecked(&prefix[..err.valid_up_to()]) }
-        }
+        Err(err) => match err.valid_up_to() {
+            0 => return Err(invalid_unicode_error(s.to_owned(), Some(err), idx)),
+            n => unsafe { from_utf8_unchecked(&prefix[..n]) },
+        },
     };
     Ok(prefix.chars().next())
 }
 
 /// Splits a OsStr at a point into a prefix that is utf-8, and the rest.
 fn os_str_split_utf8_prefix(s: &OsStr, point: usize) -> Result<(&str, &OsStr), Error> {
-    let bytes = s.as_encoded_bytes();
-    let s1 = from_utf8(&bytes[..point])
-        .map_err(|err| invalid_unicode_error(s.to_owned(), Some(err), 0))?;
-    let s2 = &bytes[point..];
+    let b = s.as_encoded_bytes();
+    let s1 = from_utf8(&b[..point]).map_err(|err| invalid_unicode_error(s.into(), Some(err), 0))?;
+    let s2 = &b[point..];
     // SAFETY: because s1 is valid utf-8 as checked per from_utf8, we
     // can safely restore the rest of the OsStr as OsStr.
     Ok((s1, unsafe { OsStr::from_encoded_bytes_unchecked(s2) }))
