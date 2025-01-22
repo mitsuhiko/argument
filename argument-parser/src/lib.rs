@@ -96,6 +96,7 @@
 //! fall back to `string_value()` if parsing fails.
 use std::ffi::{OsStr, OsString};
 use std::fmt;
+use std::iter::once;
 use std::mem::replace;
 use std::path::Path;
 use std::str::{from_utf8, from_utf8_unchecked, FromStr};
@@ -130,7 +131,7 @@ impl fmt::Display for Error {
         write!(f, "invalid argument: ")?;
         match self {
             Error::MissingValue => write!(f, "an argument was expected but not provided")?,
-            Error::InvalidUnicode { .. } => write!(f, "invalid unicode for string argument")?,
+            Error::InvalidUnicode(_) => write!(f, "invalid unicode for string argument")?,
             Error::InvalidValue { value, .. } => write!(f, "invalid value ({})", value)?,
             Error::UnexpectedArgument => write!(f, "unexpected argument")?,
             Error::UnexpectedShortOption(option) => write!(f, "unexpected option -{}", option)?,
@@ -144,8 +145,8 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Error::InvalidValue { source: err, .. } => {
-                err.as_ref().map(|e| &**e as &dyn std::error::Error)
+            Error::InvalidValue { source, .. } => {
+                source.as_ref().map(|e| &**e as &dyn std::error::Error)
             }
             _ => None,
         }
@@ -311,7 +312,7 @@ impl<'it> Parser<'it> {
         I: Iterator<Item = S> + 'it,
         S: Into<OsString> + 'it,
     {
-        Parser::from_cmdline(std::iter::once(OsString::new()).chain(args.map(Into::into)))
+        Parser::from_cmdline(once(OsString::new()).chain(args.map(Into::into)))
     }
 
     /// Returns the normalized program name (first argument).
@@ -399,7 +400,11 @@ impl<'it> Parser<'it> {
                     self.state = State::ExplicitOptionValue;
                     name
                 } else {
-                    let mut name = os_string_into_string(self.next_arg_and_reset_state().unwrap())?;
+                    let mut name = self
+                        .next_arg_and_reset_state()
+                        .unwrap()
+                        .into_string()
+                        .map_err(Error::InvalidUnicode)?;
                     name.drain(..2);
                     name
                 };
@@ -415,10 +420,8 @@ impl<'it> Parser<'it> {
 
     /// Parse the current argument as value.
     ///
-    /// This gets a value for both options and arguments and tries to parse it
-    /// with [`FromStr`].  Use [`raw_value`](Self::raw_value) if you want it
-    /// completely unparsed.  If you want the value as string, you should use
-    /// [`string_value`](Self::string_value) instead.
+    /// This gets a value for both options and positional arguments and tries to
+    /// parse it with [`FromStr`].
     ///
     /// When you should use which method?
     ///
@@ -453,7 +456,9 @@ impl<'it> Parser<'it> {
     ///
     /// This behaves like [`value::<String>`](Self::value) but avoids an extra copy.
     pub fn string_value(&mut self) -> Result<String, Error> {
-        os_string_into_string(self.raw_value()?)
+        self.raw_value()?
+            .into_string()
+            .map_err(Error::InvalidUnicode)
     }
 
     /// Parse the current argument as a raw value ([`OsString`]).
@@ -492,7 +497,7 @@ impl<'it> Parser<'it> {
     /// extra copy.
     pub fn optional_string_value(&mut self) -> Result<Option<String>, Error> {
         match self.optional_raw_value() {
-            Some(value) => os_string_into_string(value).map(Some),
+            Some(value) => value.into_string().map_err(Error::InvalidUnicode).map(Some),
             None => Ok(None),
         }
     }
@@ -673,9 +678,4 @@ fn os_str_strip_prefix<'s>(s: &'s OsStr, prefix: &str) -> &'s OsStr {
     let b = s.as_encoded_bytes();
     // SAFETY: stripping an utf-8 prefix leaves a well formed OsStr behind
     unsafe { OsStr::from_encoded_bytes_unchecked(b.strip_prefix(prefix.as_bytes()).unwrap_or(b)) }
-}
-
-/// Convert an OsString into a string.
-fn os_string_into_string(s: OsString) -> Result<String, Error> {
-    s.into_string().map_err(Error::InvalidUnicode)
 }
