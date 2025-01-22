@@ -45,6 +45,20 @@ fn test_basic() -> Result<(), Error> {
 }
 
 #[test]
+fn test_default_flags() {
+    let parser = Parser::from_args(["test"].into_iter());
+
+    // Default enabled flags
+    assert!(parser.get_flag(Flag::OptionsEnabled));
+    assert!(parser.get_flag(Flag::HandleDoubleDash));
+
+    // Default disabled flags
+    assert!(!parser.get_flag(Flag::DisableNumericOptions));
+    assert!(!parser.get_flag(Flag::DisableOptionsAfterArgs));
+    assert!(!parser.get_flag(Flag::StripShortOptionEqualSign));
+}
+
+#[test]
 fn test_value_parsing() -> Result<(), Error> {
     let mut parser = Parser::from_args(["a-string", "42", "true", "127.0.0.1"].into_iter());
 

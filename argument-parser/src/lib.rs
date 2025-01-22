@@ -384,18 +384,18 @@ impl<'it> Parser<'it> {
                 self.next_arg_and_reset_state();
                 continue;
             } else if arg_bytes.starts_with(b"--") {
-                let option_name = if let Some(ind) = arg_bytes.iter().position(|&b| b == b'=') {
-                    let (prefix, arg_value) = os_str_split_utf8_prefix(arg, ind + 1)?;
-                    let prefix = prefix[2..prefix.len() - 1].to_string();
+                let name = if let Some(ind) = arg_bytes.iter().position(|&b| b == b'=') {
+                    let (name, arg_value) = os_str_split_utf8_prefix(arg, ind + 1)?;
+                    let name = name[2..name.len() - 1].to_string();
                     self.current_arg = Some(arg_value.to_owned());
                     self.state = State::ExplicitOptionValue;
-                    prefix
+                    name
                 } else {
                     let mut name = os_string_into_string(self.next_arg_and_reset_state().unwrap())?;
                     name.drain(..2);
                     name
                 };
-                return Ok(Some(Param::Long(option_name)));
+                return Ok(Some(Param::Long(name)));
             } else if self.considered_opt(arg) {
                 self.state = State::ShortOptChain(1);
                 continue;
@@ -543,15 +543,6 @@ impl<'it> Parser<'it> {
         }
     }
 
-    /// Returns `true` if the parser reached the end.
-    ///
-    /// At that point [`param`](Self::param) will always return `None`
-    /// and [`value`](Self::value) will fail with an error.
-    #[inline]
-    pub fn finished(&self) -> bool {
-        self.current_arg.is_none()
-    }
-
     /// This checks if the parser currently looks at what looks like a normal argument.
     ///
     /// This will return false if the parser reached the end of the command line
@@ -582,6 +573,31 @@ impl<'it> Parser<'it> {
         }
     }
 
+    /// Returns `true` if the parser reached the end.
+    ///
+    /// At that point [`param`](Self::param) will always return `None`
+    /// and [`value`](Self::value) will fail with an error.
+    #[inline]
+    pub fn finished(&self) -> bool {
+        self.current_arg.is_none()
+    }
+
+    /// Check if a parsing [`Flag`] is currently set.
+    #[inline]
+    pub fn get_flag(&self, flag: Flag) -> bool {
+        self.flags & flag.as_u8() != 0
+    }
+
+    /// Sets or unsets a parsing [`Flag`].
+    #[inline]
+    pub fn set_flag(&mut self, flag: Flag, yes: bool) {
+        if yes {
+            self.flags |= flag.as_u8();
+        } else {
+            self.flags &= !flag.as_u8();
+        }
+    }
+
     /// Moves ahead one argument and resets the internal state.
     fn next_arg_and_reset_state(&mut self) -> Option<OsString> {
         let rv = self.current_arg.take();
@@ -608,22 +624,6 @@ impl<'it> Parser<'it> {
             && arg_bytes.first() == Some(&b'-')
             && (!self.get_flag(Flag::DisableNumericOptions)
                 || arg_bytes.get(1).map_or(true, |x| !x.is_ascii_digit()))
-    }
-
-    /// Check if a parsing [`Flag`] is currently set.
-    #[inline]
-    pub fn get_flag(&self, flag: Flag) -> bool {
-        self.flags & flag.as_u8() != 0
-    }
-
-    /// Sets or unsets a parsing [`Flag`].
-    #[inline]
-    pub fn set_flag(&mut self, flag: Flag, yes: bool) {
-        if yes {
-            self.flags |= flag.as_u8();
-        } else {
-            self.flags &= !flag.as_u8();
-        }
     }
 }
 
