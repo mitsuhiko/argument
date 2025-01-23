@@ -20,7 +20,7 @@ fn execute() -> Result<(), Error> {
     let mut shout = false;
 
     while let Some(param) = parser.param()? {
-        if param.is_short('n') || param.is_long("number") {
+        if param.is_either('n', "number") {
             numbers.push(parser.value()?);
         } else if param.is_long("shout") {
             shout = true;

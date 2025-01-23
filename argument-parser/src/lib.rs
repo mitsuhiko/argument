@@ -3,7 +3,7 @@
 //! drive your own parsing.
 //!
 //! The goal of this crate is that it's stable, excellently tested and requires
-//! little updates and maintenance.  The goal is that you can use it, and it keeps
+//! little updates and maintenance.  The goal is that you can use it and it keeps
 //! working.
 //!
 //! # Example
@@ -35,11 +35,11 @@
 //! * [`Parser::from_env`] initializes the parser with the command line
 //!   from the current environment.
 //! * [`Parser::param`] pulls parameters from the command line one after another.  If
-//!   the end of the command line was reached, `Ok(None)` is returned.  Reading
+//!   the end of the command line is reached, `Ok(None)` is returned.  Reading
 //!   parameters only reads the name (or presence) of the parameter, not the
-//!   value.  To get the value, [`Parser::value`] (parses via [`FromStr`]),
+//!   value.  To get the value, use [`Parser::value`] (parses via [`FromStr`]),
 //!   [`Parser::string_value`] (converts into a [`String`]), or
-//!   [`Parser::raw_value`] (just reads the raw [`OsString`]) must be used.
+//!   [`Parser::raw_value`] (just reads the raw [`OsString`]).
 //! * [`Param`] can be deconstructed (it's an enum) and it provides utilities:
 //!   * [`Param::is_short`] checks if a parameter is a specific short option.
 //!   * [`Param::is_long`] checks if a parameter is a specific long option.
@@ -50,53 +50,53 @@
 //!
 //! # Behavior
 //!
-//! This crate follows POSIX behavior with getopt style handling as much as
-//! possible.  In particular short arguments do not take `=` to separate from
-//! the value (eg: `-x42` represents a value of `42` and `-x=42` a value of
+//! This crate follows POSIX behavior with getopt-style handling as much as
+//! possible.  In particular, short arguments do not take `=` to separate from
+//! the value (e.g., `-x42` represents a value of `42` and `-x=42` a value of
 //! `=42`).  If you don't want that, you can change it with
-//! [`Flag::StripShortOptionEqualSign`] though this is strongly discouraged.
+//! [`Flag::StripShortOptionEqualSign`], though this is strongly discouraged.
 //!
-//! The special `--` argument is handled automatically for you but the behavior
-//! can be disabled by un-setting [`Flag::HandleDoubleDash`].
+//! The special `--` argument is handled automatically for you, but the behavior
+//! can be disabled by unsetting [`Flag::HandleDoubleDash`].
 //!
-//! By default numeric options are valid options, but if you don't expect to have
-//! any you can disable that by setting [`Flag::DisableNumericOptions`] in which
+//! By default, numeric options are valid options, but if you don't expect to have
+//! any, you can disable them by setting [`Flag::DisableNumericOptions`], in which
 //! case they are handled like normal arguments.
 //!
-//! By default options and arguments can be freely mixed, but this can be
-//! changed by setting [`Flag::DisableOptionsAfterArgs`].  With this flag set
-//! the first time a position argument is encountered, the options are disabled.
+//! By default, options and arguments can be freely mixed, but this can be
+//! changed by setting [`Flag::DisableOptionsAfterArgs`].  With this flag set,
+//! the first time a positional argument is encountered, the options are disabled.
 //!
 //! # General Parsing Rules
 //!
 //! * You can at any point parse a [`value`](Parser::value).  It will fail
 //!   if there are no more arguments pending (you can use
 //!   [`Parser::finished`] to check if you reached the end).
-//! * When parsing a [`param`](Parser::param) it only parses the name and
-//!   pauses before the value.  Consequently when parsing a positional
-//!   argument it pauses just before the actual value is parsed.
-//! * When entering short options (eg: `-f`) the parser will prevent
+//! * When parsing a [`param`](Parser::param), it only parses the name and
+//!   pauses before the value.  Consequently, when parsing a positional
+//!   argument, it pauses just before the actual value is parsed.
+//! * When entering short options (e.g., `-f`), the parser will prevent
 //!   raw parameter access until the rest of the argument is parsed.
 //! * When `--` is encountered while parsing parameters, it swallows that
 //!   argument and flips the [`Flag::OptionsEnabled`] flag to `true`.  If you
-//!   don't want that you can un-set the [`Flag::HandleDoubleDash`] flag.
-//! * For complex parsing you can try to parse raw arguments with
+//!   don't want that, you can unset the [`Flag::HandleDoubleDash`] flag.
+//! * For complex parsing, you can try to parse raw arguments with
 //!   [`peek_raw_arg`](Parser::peek_raw_arg) and
-//!   [`raw_arg`](Parser::raw_arg) before falling back the regular
+//!   [`raw_arg`](Parser::raw_arg) before falling back to the regular
 //!   parsing methods.
 //! * Option names must be valid unicode.
 //! * All the flags and options of the parser can be changed at any point
-//!   as parsing takes place.  For instance you can turn on and off the handling
+//!   as parsing takes place.  For instance, you can turn on and off the handling
 //!   of numeric options as you keep parsing.
 //!
 //! # Error Handling
 //!
-//! When the [`Parser`] encounters an error it's not recoverable and the parser is
-//! left in an undefined state (eg: an argument might be lost, future calls
-//! might fail).  For instance it's not safe to try to call `value::<i32>()` and
+//! When the [`Parser`] encounters an error, it's not recoverable and the parser is
+//! left in an undefined state (e.g., an argument might be lost, future calls
+//! might fail).  For instance, it's not safe to try to call `value::<i32>()` and
 //! fall back to `string_value()` if parsing fails.
 //!
-//! This crate makes a best effort at error reporting but higher level abstractions
+//! This crate makes a best effort at error reporting, but higher level abstractions
 //! should be used to improve the user experience.  Error messages might indicate
 //! the wrong parameters if raw argument parsing is used.
 use std::error::Error as StdError;
@@ -275,11 +275,18 @@ impl Param {
     }
 
     /// Is this a specific long option?
-    pub fn is_long(&self, cmd: &str) -> bool {
+    pub fn is_long(&self, s: &str) -> bool {
         match self {
-            Param::Long(s) => s == cmd,
+            Param::Long(r) => r == s,
             Param::Short(_) | Param::Arg => false,
         }
+    }
+
+    /// Does it match the short or long option?
+    ///
+    /// This is a shortcut for checking both short and long option.
+    pub fn is_either(&self, short: char, long: &str) -> bool {
+        self.is_short(short) || self.is_long(long)
     }
 
     /// Is this a positional argument?
