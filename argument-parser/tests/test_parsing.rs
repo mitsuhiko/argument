@@ -433,3 +433,24 @@ fn test_raw_arg_options_peeking() -> Result<(), Error> {
     assert_eq!(parser.string_value()?, "blah");
     Ok(())
 }
+
+#[test]
+fn test_skipped_arg_value() -> Result<(), Error> {
+    let mut parser = Parser::from_args(["first", "second", "--third=value", "-xl"].into_iter());
+
+    assert_eq!(parser.param()?, Some(Param::Arg));
+    // first is intentionally lost
+
+    assert_eq!(parser.param()?, Some(Param::Arg));
+    assert_eq!(parser.string_value()?, "second");
+    assert_eq!(parser.param()?, Some(Param::Long("third".into())));
+    // value is intentionally lost
+
+    assert_eq!(parser.param()?, Some(Param::Short('x')));
+    assert_eq!(parser.param()?, Some(Param::Short('l')));
+    assert_eq!(parser.param()?, None);
+
+    assert!(parser.finished());
+
+    Ok(())
+}

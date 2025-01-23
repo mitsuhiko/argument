@@ -792,6 +792,7 @@ fn os_str_strip_prefix<'s>(s: &'s OsStr, prefix: &str) -> &'s OsStr {
     unsafe { OsStr::from_encoded_bytes_unchecked(b.strip_prefix(prefix.as_bytes()).unwrap_or(b)) }
 }
 
+/// Converts an OsString into String and handles errors.
 fn os_string_into_string(s: OsString) -> Result<String, Error> {
     s.into_string()
         .map_err(|s| Error::new(ErrorKind::InvalidUnicode).with_os_string(s))
