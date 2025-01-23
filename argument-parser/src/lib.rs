@@ -89,16 +89,17 @@
 //!   as parsing takes place.  For instance you can turn on and off the handling
 //!   of numeric options as you keep parsing.
 //!
-//! # Limitations and Error Handling
-//!
-//! This crate is almost comically bad at error reporting and proudly so.  That's
-//! not because error messages are not important, but because good error messages
-//! need information that a parser just should not take care of.
+//! # Error Handling
 //!
 //! When the [`Parser`] encounters an error it's not recoverable and the parser is
 //! left in an undefined state (eg: an argument might be lost, future calls
 //! might fail).  For instance it's not safe to try to call `value::<i32>()` and
 //! fall back to `string_value()` if parsing fails.
+//!
+//! This crate makes a best effort at error reporting but higher level abstractions
+//! should be used to improve the user experience.  Error messages might indicate
+//! the wrong parameters if raw argument parsing is used.
+use std::error::Error as StdError;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::iter::once;
@@ -106,65 +107,68 @@ use std::mem::replace;
 use std::path::Path;
 use std::str::{from_utf8, from_utf8_unchecked, FromStr};
 
-pub struct Error {
-    repr: Box<ErrorRepr>,
-}
+/// Represents a parsing error.
+pub struct Error(Box<ErrorRepr>);
 
 impl Error {
     fn new(kind: ErrorKind) -> Error {
-        Error {
-            repr: Box::new(ErrorRepr {
-                kind,
-                param: None,
-                value: None,
-                source: None,
-            }),
+        Error(Box::new(ErrorRepr {
+            kind,
+            param: None,
+            value: None,
+            source: None,
+        }))
+    }
+
+    /// The type of error that ocurred.
+    pub fn kind(&self) -> ErrorKind {
+        self.0.kind
+    }
+
+    /// If available, a reference to the parameter that caused the error.
+    pub fn param(&self) -> Option<&Param> {
+        self.0.param.as_ref()
+    }
+
+    /// The value of the argument as string if available.
+    ///
+    /// If the parameter wasn't valid unicode, you might find the value
+    /// instead in [`raw_value`](Self::raw_value).
+    pub fn value(&self) -> Option<&str> {
+        match (self.0.kind, self.0.value.as_ref()?) {
+            (ErrorKind::Custom, _) => None,
+            (_, Ok(s)) => Some(s),
+            (_, Err(s)) => s.to_str(),
+        }
+    }
+
+    /// The value of the argument as raw [`OsStr`] if available.
+    pub fn raw_value(&self) -> Option<&OsStr> {
+        match (self.0.kind, self.0.value.as_ref()?) {
+            (ErrorKind::Custom, _) => None,
+            (_, Ok(s)) => Some(OsStr::new(s)),
+            (_, Err(s)) => Some(s),
         }
     }
 
     fn with_param(mut self, param: Param) -> Error {
-        self.repr.param = Some(param);
+        self.0.param = Some(param);
         self
     }
 
-    fn with_value(mut self, value: ErrorValue) -> Error {
-        self.repr.value = Some(value);
+    fn with_string(mut self, value: String) -> Error {
+        self.0.value = Some(Ok(value));
         self
     }
 
-    fn with_source(mut self, source: Box<dyn std::error::Error + Send + Sync + 'static>) -> Error {
-        self.repr.source = Some(source);
+    fn with_os_string(mut self, value: OsString) -> Error {
+        self.0.value = Some(Err(value));
         self
     }
 
-    pub fn kind(&self) -> ErrorKind {
-        self.repr.kind
-    }
-
-    pub fn param(&self) -> Option<&Param> {
-        self.repr.param.as_ref()
-    }
-
-    pub fn raw_value(&self) -> Option<&OsStr> {
-        match self.repr.value.as_ref()? {
-            ErrorValue::String(s) => Some(OsStr::new(s)),
-            ErrorValue::OsString(s) => Some(s),
-        }
-    }
-
-    pub fn value(&self) -> Option<&str> {
-        match self.repr.value.as_ref()? {
-            ErrorValue::String(s) => Some(s),
-            ErrorValue::OsString(s) => s.to_str(),
-        }
-    }
-
-    fn option_name(&self) -> Option<String> {
-        match self.param() {
-            Some(Param::Short(x)) => Some(format!("-{}", x)),
-            Some(Param::Long(x)) => Some(format!("--{}", x)),
-            _ => None,
-        }
+    fn with_source(mut self, source: Box<dyn StdError + Send + Sync + 'static>) -> Error {
+        self.0.source = Some(source);
+        self
     }
 }
 
@@ -176,68 +180,62 @@ impl<'s> From<&'s str> for Error {
 
 impl From<String> for Error {
     fn from(message: String) -> Error {
-        Error {
-            repr: Box::new(ErrorRepr {
-                kind: ErrorKind::Custom,
-                param: None,
-                value: Some(ErrorValue::String(message)),
-                source: None,
-            }),
-        }
+        Error::new(ErrorKind::Custom).with_string(message)
     }
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match (self.kind(), self.option_name()) {
-            (ErrorKind::MissingValue, Some(x)) => write!(f, "missing argument for option {}", x),
-            (ErrorKind::MissingValue, None) => write!(f, "missing argument"),
-            (ErrorKind::InvalidUnicode, Some(x)) => {
-                write!(f, "argument for option {} is invalid unicode", x)
-            }
-            (ErrorKind::InvalidUnicode, None) => write!(f, "argument is invalid unicode"),
-            (ErrorKind::InvalidValue, Some(x)) => write!(f, "argument for option {} is invalid", x),
-            (ErrorKind::InvalidValue, None) => write!(f, "argument is invalid"),
-            (ErrorKind::UnexpectedParameter, Some(x)) => write!(f, "unexpected option {}", x),
-            (ErrorKind::UnexpectedParameter, None) => write!(f, "unexpected argument"),
-            (ErrorKind::Custom, _) => write!(f, "{}", self.value().unwrap()),
+        use ErrorKind::*;
+        let option_name = match self.param() {
+            Some(Param::Short(x)) => Some(format!("'-{}'", x)),
+            Some(Param::Long(x)) => Some(format!("'--{}'", x)),
+            _ => None,
+        };
+        match (self.kind(), option_name) {
+            (MissingValue, Some(x)) => write!(f, "missing argument for {}", x),
+            (MissingValue, None) => write!(f, "missing argument"),
+            (InvalidUnicode, Some(x)) => write!(f, "argument for {} contains invalid unicode", x),
+            (InvalidUnicode, None) => write!(f, "argument contains invalid unicode"),
+            (InvalidValue, Some(x)) => write!(f, "argument for {} is invalid", x),
+            (InvalidValue, None) => write!(f, "argument is invalid"),
+            (UnexpectedParameter, Some(x)) => write!(f, "unexpected argument {}", x),
+            (UnexpectedParameter, None) => write!(f, "unexpected argument"),
+            (Custom, _) => write!(f, "{}", self.0.value.as_ref().unwrap().as_ref().unwrap()),
         }
     }
 }
 
 impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Error2")
+        f.debug_struct("Error")
+            .field("message", &self.to_string())
             .field("kind", &self.kind())
             .field("param", &self.param())
-            .field("raw_value", &self.raw_value())
+            .field("value", &self.raw_value())
+            .field("source", &self.source())
             .finish()
     }
 }
 
-impl std::error::Error for Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self.repr.source {
+impl StdError for Error {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        match self.0.source {
             Some(ref source) => Some(&**source),
             None => None,
         }
     }
 }
 
-enum ErrorValue {
-    String(String),
-    OsString(OsString),
-}
-
 struct ErrorRepr {
     kind: ErrorKind,
     param: Option<Param>,
-    value: Option<ErrorValue>,
-    source: Option<Box<dyn std::error::Error + Send + Sync + 'static>>,
+    value: Option<Result<String, OsString>>,
+    source: Option<Box<dyn StdError + Send + Sync + 'static>>,
 }
 
-/// Represents a parsing error.
-#[derive(Debug, Clone, Copy)]
+/// Represents the type of parsing error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[non_exhaustive]
 pub enum ErrorKind {
     /// Emitted when a value was expected but none was there.
@@ -245,13 +243,10 @@ pub enum ErrorKind {
     /// Happens when parsing a parameter as string and the string is invalid unicode.
     InvalidUnicode,
     /// Happens when parsing a parameter into another type and parsing failed.
-    ///
-    /// The first part is the value that failed, the second field is the source
-    /// parsing error which is also returned from `source()`.
     InvalidValue,
-    /// Created by [`Param::into_unexpected_error`] for positional arguments.
+    /// Created by [`Param::into_unexpected_error`].
     UnexpectedParameter,
-    /// A custom message
+    /// A custom error message
     Custom,
 }
 
@@ -440,18 +435,9 @@ impl<'it> Parser<'it> {
     ///
     /// While parsing for parameters, `--` is automatically handled unless disabled.
     pub fn param(&mut self) -> Result<Option<Param>, Error> {
-        match self.next_param()? {
-            Some(param) => {
-                self.last_param = Some(param.clone());
-                Ok(Some(param))
-            }
-            None => Ok(None),
-        }
-    }
-
-    /// Returns the last parsed parameter.
-    pub fn last_param(&self) -> Option<&Param> {
-        self.last_param.as_ref()
+        let param = self.next_param().map_err(|err| self.augment_error(err))?;
+        self.last_param = param.clone();
+        Ok(param)
     }
 
     fn next_param(&mut self) -> Result<Option<Param>, Error> {
@@ -546,18 +532,16 @@ impl<'it> Parser<'it> {
     pub fn value<V>(&mut self) -> Result<V, Error>
     where
         V: FromStr,
-        V::Err: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
+        V::Err: Into<Box<dyn StdError + Send + Sync + 'static>>,
     {
-        // TODO: attach parameter name
-        parse_string(self.string_value()?)
+        parse_string(self.string_value()?).map_err(|err| self.augment_error(err))
     }
 
     /// Parse the current argument as value ensuring it's a valid unicode string.
     ///
     /// This behaves like [`value::<String>`](Self::value) but avoids an extra copy.
     pub fn string_value(&mut self) -> Result<String, Error> {
-        // TODO: attach parameter name
-        os_string_into_string(self.raw_value()?)
+        os_string_into_string(self.raw_value()?).map_err(|err| self.augment_error(err))
     }
 
     /// Parse the current argument as a raw value ([`OsString`]).
@@ -572,6 +556,7 @@ impl<'it> Parser<'it> {
         self.optional_raw_value()
             .or_else(|| self.next_arg_and_reset_state())
             .ok_or_else(|| Error::new(ErrorKind::MissingValue))
+            .map_err(|err| self.augment_error(err))
     }
 
     /// Parse the current argument as an optional value.
@@ -585,9 +570,12 @@ impl<'it> Parser<'it> {
     pub fn optional_value<V>(&mut self) -> Result<Option<V>, Error>
     where
         V: FromStr,
-        V::Err: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
+        V::Err: Into<Box<dyn StdError + Send + Sync + 'static>>,
     {
-        self.optional_string_value()?.map(parse_string).transpose()
+        self.optional_string_value()?
+            .map(parse_string)
+            .transpose()
+            .map_err(|err| self.augment_error(err))
     }
 
     /// Parse the current argument as an optional value ensuring it's a valid unicode string.
@@ -596,11 +584,9 @@ impl<'it> Parser<'it> {
     /// extra copy.
     pub fn optional_string_value(&mut self) -> Result<Option<String>, Error> {
         match self.optional_raw_value() {
-            Some(value) => value
-                .into_string()
-                .map_err(|s| {
-                    Error::new(ErrorKind::InvalidUnicode).with_value(ErrorValue::OsString(s))
-                })
+            Some(value) => os_string_into_string(value)
+                .and_then(parse_string)
+                .map_err(|err| self.augment_error(err))
                 .map(Some),
             None => Ok(None),
         }
@@ -737,16 +723,26 @@ impl<'it> Parser<'it> {
             && (!self.get_flag(Flag::DisableNumericOptions)
                 || arg_bytes.get(1).map_or(true, |x| !x.is_ascii_digit()))
     }
+
+    /// Attach the name of the current parameter to the error if needed.
+    fn augment_error(&self, err: Error) -> Error {
+        if err.param().is_none() {
+            if let Some(ref param) = self.last_param {
+                return err.with_param(param.clone());
+            }
+        }
+        err
+    }
 }
 
 fn parse_string<V>(value: String) -> Result<V, Error>
 where
     V: FromStr,
-    V::Err: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
+    V::Err: Into<Box<dyn StdError + Send + Sync + 'static>>,
 {
     V::from_str(&value).map_err(|err| {
         Error::new(ErrorKind::InvalidValue)
-            .with_value(ErrorValue::String(value))
+            .with_string(value)
             .with_source(err.into())
     })
 }
@@ -761,10 +757,7 @@ fn os_str_char_at(s: &OsStr, idx: usize) -> Result<Option<char>, Error> {
     let prefix = match from_utf8(prefix) {
         Ok(prefix) => prefix,
         Err(err) => match err.valid_up_to() {
-            0 => {
-                return Err(Error::new(ErrorKind::InvalidUnicode)
-                    .with_value(ErrorValue::OsString(s.into())))
-            }
+            0 => return Err(Error::new(ErrorKind::InvalidUnicode).with_os_string(s.into())),
             n => unsafe { from_utf8_unchecked(&prefix[..n]) },
         },
     };
@@ -774,9 +767,8 @@ fn os_str_char_at(s: &OsStr, idx: usize) -> Result<Option<char>, Error> {
 /// Splits a OsStr at a point into a prefix that is utf-8, and the rest.
 fn os_str_split_utf8_prefix(s: &OsStr, point: usize) -> Result<(&str, &OsStr), Error> {
     let b = s.as_encoded_bytes();
-    let s1 = from_utf8(&b[..point]).map_err(|_| {
-        Error::new(ErrorKind::InvalidUnicode).with_value(ErrorValue::OsString(s.into()))
-    })?;
+    let s1 = from_utf8(&b[..point])
+        .map_err(|_| Error::new(ErrorKind::InvalidUnicode).with_os_string(s.into()))?;
     let s2 = &b[point..];
     // SAFETY: because s1 is valid utf-8 as checked per from_utf8, we
     // can safely restore the rest of the OsStr as OsStr.
@@ -792,5 +784,5 @@ fn os_str_strip_prefix<'s>(s: &'s OsStr, prefix: &str) -> &'s OsStr {
 
 fn os_string_into_string(s: OsString) -> Result<String, Error> {
     s.into_string()
-        .map_err(|s| Error::new(ErrorKind::InvalidUnicode).with_value(ErrorValue::OsString(s)))
+        .map_err(|s| Error::new(ErrorKind::InvalidUnicode).with_os_string(s))
 }
