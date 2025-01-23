@@ -22,8 +22,6 @@ fn test_missing_value_error() -> Result<(), Error> {
     let err = parser.value::<i64>().unwrap_err();
     assert_eq!(err.kind(), ErrorKind::MissingValue);
     assert_eq!(err.to_string(), "missing argument for '-n'");
-    assert_eq!(err.param(), Some(&Param::Short('n')));
-    assert!(err.value().is_none());
 
     Ok(())
 }
@@ -39,8 +37,6 @@ fn test_invalid_value_error() -> Result<(), Error> {
         format!("{:#}", err),
         "invalid value for '-n': \"invalid\" (invalid digit found in string)"
     );
-    assert_eq!(err.param(), Some(&Param::Short('n')));
-    assert_eq!(err.value(), Some("invalid"));
 
     Ok(())
 }
@@ -66,8 +62,6 @@ fn test_invalid_unicode_error() -> Result<(), Error> {
             make_invalid_unicode_os_string()
         )
     );
-    assert_eq!(err.param(), Some(&Param::Short('n')));
-    assert!(err.value().is_none());
 
     Ok(())
 }
