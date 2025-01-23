@@ -454,3 +454,28 @@ fn test_skipped_arg_value() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[test]
+fn test_optional_vs_regular_value() -> Result<(), Error> {
+    // Optional values only parse values directly attached to options
+    let mut parser = Parser::from_args(["-n42", "-m", "23"].into_iter());
+
+    assert_eq!(parser.param()?, Some(Param::Short('n')));
+    assert_eq!(parser.optional_value::<i32>()?, Some(42)); // Parses "42" from "-n42"
+
+    assert_eq!(parser.param()?, Some(Param::Short('m')));
+    assert_eq!(parser.optional_value::<i32>()?, None); // No value in "-m"
+    assert_eq!(parser.value::<i32>()?, 23); // Parses next arg "23"
+
+    // Long options with = are also optional values
+    let mut parser = Parser::from_args(["--num=42", "--val", "23"].into_iter());
+
+    assert_eq!(parser.param()?, Some(Param::Long("num".into())));
+    assert_eq!(parser.optional_value::<i32>()?, Some(42)); // Parses "42" from "--num=42"
+
+    assert_eq!(parser.param()?, Some(Param::Long("val".into())));
+    assert_eq!(parser.optional_value::<i32>()?, None); // No value in "--val"
+    assert_eq!(parser.value::<i32>()?, 23); // Parses next arg "23"
+
+    Ok(())
+}
