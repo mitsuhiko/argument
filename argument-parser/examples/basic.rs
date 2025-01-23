@@ -49,13 +49,11 @@ fn main() {
     use std::error::Error;
     if let Err(err) = execute() {
         eprintln!("error: {}", err);
+        if let Some(source) = err.source() {
+            eprintln!("  cause: {}", source);
+        }
         if let Some(value) = err.raw_value() {
             eprintln!("  value: {:?}", value.to_string_lossy());
-        }
-        let mut source = err.source();
-        while let Some(err) = source {
-            eprintln!("  cause: {}", err);
-            source = err.source();
         }
         std::process::exit(1);
     }
