@@ -351,6 +351,7 @@ impl Flag {
 }
 
 /// An internal state indicator for the parser
+#[derive(Copy, Clone)]
 enum State {
     Default,
     ExplicitOptionValue,
@@ -456,72 +457,8 @@ impl<'it> Parser<'it> {
     ///
     /// While parsing for parameters, `--` is automatically handled unless disabled.
     pub fn param(&mut self) -> Result<Option<Param>, Error> {
-        let param = self.next_param().map_err(|err| self.augment_error(err))?;
-        self.last_param = param.clone();
-        Ok(param)
-    }
-
-    fn next_param(&mut self) -> Result<Option<Param>, Error> {
-        loop {
-            let arg = match self.state {
-                State::Default => match self.current_arg.as_deref() {
-                    Some(arg) => arg,
-                    None => return Ok(None),
-                },
-                // Not consuming values of positional arguments or started option
-                // values leads to the discarding of values.
-                State::ArgPause | State::ExplicitOptionValue => {
-                    self.next_arg_and_reset_state();
-                    continue;
-                }
-                State::ShortOptChain(ref mut pos) => {
-                    let arg = self.current_arg.as_deref().unwrap();
-                    return match os_str_char_at(arg, *pos)? {
-                        None => {
-                            self.next_arg_and_reset_state();
-                            continue;
-                        }
-                        Some(ch) => {
-                            *pos += ch.len_utf8();
-                            if *pos >= arg.len() {
-                                self.next_arg_and_reset_state();
-                            }
-                            Ok(Some(Param::Short(ch)))
-                        }
-                    };
-                }
-            };
-
-            let arg_bytes = arg.as_encoded_bytes();
-            if !self.get_flag(Flag::OptionsEnabled) {
-                return Ok(Some(self.pause_for_arg()));
-            } else if arg_bytes == b"--" {
-                if !self.get_flag(Flag::HandleDoubleDash) {
-                    return Ok(Some(self.pause_for_arg()));
-                }
-                self.set_flag(Flag::OptionsEnabled, false);
-                self.next_arg_and_reset_state();
-                continue;
-            } else if arg_bytes.starts_with(b"--") {
-                let name = if let Some(ind) = arg_bytes.iter().position(|&b| b == b'=') {
-                    let (name, arg_value) = os_str_split_utf8_prefix(arg, ind + 1)?;
-                    let name = name[2..name.len() - 1].to_string();
-                    self.current_arg = Some(arg_value.to_owned());
-                    self.state = State::ExplicitOptionValue;
-                    name
-                } else {
-                    let mut name = os_string_into_string(self.next_arg_and_reset_state().unwrap())?;
-                    name.drain(..2);
-                    name
-                };
-                return Ok(Some(Param::Long(name)));
-            } else if self.considered_opt(arg) {
-                self.state = State::ShortOptChain(1);
-                continue;
-            } else {
-                return Ok(Some(self.pause_for_arg()));
-            }
-        }
+        self.last_param = self.parse_param().map_err(|err| self.augment_error(err))?;
+        Ok(self.last_param.clone())
     }
 
     /// Parse the current argument as a value.
@@ -676,23 +613,12 @@ impl<'it> Parser<'it> {
     /// It's generally strongly recommended not to create command line tools that
     /// depend on such behavior.
     pub fn looks_at_value(&self) -> bool {
-        let current = match self.current_arg.as_ref() {
-            None => return false,
-            Some(arg) => arg,
-        };
-        if !self.get_flag(Flag::OptionsEnabled) {
-            true
-        } else {
-            match self.state {
-                State::ExplicitOptionValue | State::ShortOptChain(_) => true,
-                State::Default | State::ArgPause => {
-                    if current == "--" {
-                        !self.get_flag(Flag::HandleDoubleDash)
-                    } else {
-                        !self.considered_opt(current)
-                    }
-                }
-            }
+        let current = self.current_arg.as_ref();
+        match (self.state, current, self.get_flag(Flag::OptionsEnabled)) {
+            (_, None, _) => false,
+            (_, Some(_), false) => true,
+            (State::ExplicitOptionValue | State::ShortOptChain(_), Some(_), true) => true,
+            (State::Default | State::ArgPause, Some(c), true) => !self.considered_opt(c),
         }
     }
 
@@ -718,6 +644,70 @@ impl<'it> Parser<'it> {
             self.flags |= flag.as_u8();
         } else {
             self.flags &= !flag.as_u8();
+        }
+    }
+
+    /// Low-level next param parsing.
+    fn parse_param(&mut self) -> Result<Option<Param>, Error> {
+        loop {
+            let arg = match self.state {
+                State::Default => match self.current_arg.as_deref() {
+                    Some(arg) => arg,
+                    None => return Ok(None),
+                },
+                // Not consuming values of positional arguments or started option
+                // values leads to the discarding of values.
+                State::ArgPause | State::ExplicitOptionValue => {
+                    self.next_arg_and_reset_state();
+                    continue;
+                }
+                State::ShortOptChain(ref mut pos) => {
+                    let arg = self.current_arg.as_deref().unwrap();
+                    return match os_str_char_at(arg, *pos)? {
+                        None => {
+                            self.next_arg_and_reset_state();
+                            continue;
+                        }
+                        Some(ch) => {
+                            *pos += ch.len_utf8();
+                            if *pos >= arg.len() {
+                                self.next_arg_and_reset_state();
+                            }
+                            Ok(Some(Param::Short(ch)))
+                        }
+                    };
+                }
+            };
+
+            let arg_bytes = arg.as_encoded_bytes();
+            if !self.get_flag(Flag::OptionsEnabled) {
+                return Ok(Some(self.pause_for_arg()));
+            } else if arg_bytes == b"--" {
+                if !self.get_flag(Flag::HandleDoubleDash) {
+                    return Ok(Some(self.pause_for_arg()));
+                }
+                self.set_flag(Flag::OptionsEnabled, false);
+                self.next_arg_and_reset_state();
+                continue;
+            } else if arg_bytes.starts_with(b"--") {
+                let name = if let Some(ind) = arg_bytes.iter().position(|&b| b == b'=') {
+                    let (name, arg_value) = os_str_split_utf8_prefix(arg, ind + 1)?;
+                    let name = name[2..name.len() - 1].to_string();
+                    self.current_arg = Some(arg_value.to_owned());
+                    self.state = State::ExplicitOptionValue;
+                    name
+                } else {
+                    let mut name = os_string_into_string(self.next_arg_and_reset_state().unwrap())?;
+                    name.drain(..2);
+                    name
+                };
+                return Ok(Some(Param::Long(name)));
+            } else if self.considered_opt(arg) {
+                self.state = State::ShortOptChain(1);
+                continue;
+            } else {
+                return Ok(Some(self.pause_for_arg()));
+            }
         }
     }
 
