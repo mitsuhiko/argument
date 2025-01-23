@@ -48,10 +48,10 @@ fn test_invalid_value_error() -> Result<(), Error> {
 #[test]
 fn test_invalid_unicode_error() -> Result<(), Error> {
     // Create an invalid unicode string
-    let mut invalid_unicode = OsString::from("-n42");
+    let mut invalid_unicode = OsString::from("-n");
     invalid_unicode.push(make_invalid_unicode_os_string());
 
-    let mut parser = Parser::from_args([invalid_unicode].into_iter());
+    let mut parser = Parser::from_args([&invalid_unicode].into_iter());
     assert_eq!(parser.param()?, Some(Param::Short('n')));
     let err = parser.value::<i64>().unwrap_err();
     assert_eq!(err.kind(), ErrorKind::InvalidUnicode);
@@ -61,7 +61,10 @@ fn test_invalid_unicode_error() -> Result<(), Error> {
     );
     assert_eq!(
         format!("{:#}", err),
-        "argument for '-n' contains invalid unicode: \"42\\xFF\\xFF\""
+        format!(
+            "argument for '-n' contains invalid unicode: {:?}",
+            make_invalid_unicode_os_string()
+        )
     );
     assert_eq!(err.param(), Some(&Param::Short('n')));
     assert!(err.value().is_none());
