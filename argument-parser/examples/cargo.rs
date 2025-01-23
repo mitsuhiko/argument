@@ -15,7 +15,7 @@ const HELP: &str = "cargo [+toolchain] [OPTIONS] [SUBCOMMAND]";
 
 fn main() {
     if let Err(err) = cli() {
-        eprintln!("error: {}", err);
+        eprintln!("error: {:#}", err);
         std::process::exit(1);
     }
 }
@@ -113,17 +113,14 @@ enum Color {
 }
 
 impl FromStr for Color {
-    type Err = String;
+    type Err = &'static str;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "auto" => Ok(Color::Auto),
             "always" => Ok(Color::Always),
             "never" => Ok(Color::Never),
-            _ => Err(format!(
-                "Invalid style '{}' [pick from: auto, always, never]",
-                s
-            )),
+            _ => Err("argument must be auto, always, or never"),
         }
     }
 }
