@@ -65,3 +65,58 @@ fn test_invalid_unicode_error() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[test]
+fn test_missing_positional_error() -> Result<(), Error> {
+    let mut parser = Parser::from_args(Vec::<OsString>::new().into_iter());
+    let err = parser.string_value().unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::MissingValue);
+    assert_eq!(err.to_string(), "missing argument");
+
+    let mut parser = Parser::from_args(["-n"].into_iter());
+    assert_eq!(parser.param()?, Some(Param::Short('n')));
+    let err = parser.string_value().unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::MissingValue);
+    assert_eq!(err.to_string(), "missing argument for '-n'");
+
+    let mut parser = Parser::from_args(["--name"].into_iter());
+    assert_eq!(parser.param()?, Some(Param::Long("name".into())));
+    let err = parser.string_value().unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::MissingValue);
+    assert_eq!(err.to_string(), "missing argument for '--name'");
+    Ok(())
+}
+
+#[test]
+fn test_custom_error() -> Result<(), Error> {
+    let err: Error = "custom error message".into();
+    assert_eq!(err.kind(), ErrorKind::Custom);
+    assert_eq!(err.to_string(), "custom error message");
+    assert_eq!(format!("{:#}", err), "custom error message");
+    assert!(err.value().is_none());
+
+    let err: Error = String::from("custom error from String").into();
+    assert_eq!(err.kind(), ErrorKind::Custom);
+    assert_eq!(err.to_string(), "custom error from String");
+    assert_eq!(format!("{:#}", err), "custom error from String");
+    assert!(err.value().is_none());
+
+    Ok(())
+}
+
+#[test]
+fn test_unexpected_param_error() -> Result<(), Error> {
+    let err = Param::Short('x').into_unexpected_error();
+    assert_eq!(err.kind(), ErrorKind::UnexpectedParameter);
+    assert_eq!(err.to_string(), "unexpected argument '-x'");
+
+    let err = Param::Long("test".into()).into_unexpected_error();
+    assert_eq!(err.kind(), ErrorKind::UnexpectedParameter);
+    assert_eq!(err.to_string(), "unexpected argument '--test'");
+
+    let err = Param::Arg.into_unexpected_error();
+    assert_eq!(err.kind(), ErrorKind::UnexpectedParameter);
+    assert_eq!(err.to_string(), "unexpected argument");
+
+    Ok(())
+}
