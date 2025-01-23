@@ -347,10 +347,10 @@ enum State {
 
 /// A low-level command line parser for POSIX command lines.
 ///
-/// This parser steps through an iterator of command line arguments
-/// parsing them one after another.  It maintains internal state to
-/// avoid accidental mis-parsing if the user invokes parsing methods in the
-/// wrong order.  For basic instructions consult the crate documentation.
+/// This parser steps through an iterator of command line arguments, parsing
+/// them one after another.  It maintains internal state to avoid accidental
+/// mishandling if parsing methods are called in the wrong order.  For basic
+/// instructions, consult the crate documentation.
 pub struct Parser<'it> {
     args: Box<dyn Iterator<Item = OsString> + 'it>,
     current_arg: Option<OsString>,
@@ -370,7 +370,7 @@ impl fmt::Debug for Parser<'_> {
 }
 
 impl<'it> Parser<'it> {
-    /// Creates a parser from the environment.
+    /// Creates a parser by using the argments from the current process environment.
     pub fn from_env() -> Parser<'static> {
         Parser::from_cmdline(std::env::args_os())
     }
@@ -407,9 +407,9 @@ impl<'it> Parser<'it> {
 
     /// Returns the normalized program name (first argument).
     ///
-    /// This will only have the file name portion of the first
-    /// argument if it was passed as full path.  If you want the full,
-    /// unprocessed first argument use [`raw_prog`](Self::raw_prog) instead.
+    /// This will only return the file name portion of the first argument if it
+    /// was passed as a full path.  If you want the full, unprocessed first
+    /// argument, use [`raw_prog`](Self::raw_prog) instead.
     pub fn prog(&self) -> &str {
         self.raw_prog()
             .map(Path::new)
@@ -418,9 +418,9 @@ impl<'it> Parser<'it> {
             .unwrap_or_default()
     }
 
-    /// Returns the raw first argument.
+    /// Returns the unprocessed program name (first argument).
     ///
-    /// This will be the full path name if it's there.
+    /// This will be the full pathname if it exists.
     pub fn raw_prog(&self) -> Option<&OsStr> {
         self.prog.as_deref()
     }
@@ -428,17 +428,18 @@ impl<'it> Parser<'it> {
     /// Parse the current argument as parameter.
     ///
     /// A parameter can be a short named option (`-o`), a long named option
-    /// `(--option)`, or a positional argument.  Note that parameters always
+    /// (`--option`), or a positional argument.  Note that parameters always
     /// come without values, that includes positional arguments!  To get the
     /// value to a parameter you need to use one of the [`value`](Self::value)
     /// parsing methods.
     ///
-    /// You can think of this as a special parsing step that always pauses just
-    /// before the value is consumed.  If you were to call [`param`](Self::param)
-    /// again on a positional argument without consuming the value, the value is
-    /// lost.
+    /// The parser operates in two phases.  First, it identifies a parameter and
+    /// pauses before consuming its value.  This pause lets you inspect the
+    /// parameter type.  Second, you must explicitly consume the value using a
+    /// value parsing method.  If you call [`param`](Self::param) again without
+    /// consuming the value, that value will be skipped and lost.
     ///
-    /// For simplicity reasons, parameter names are always valid unicode strings.
+    /// For simplicity reasons, parameter names are always valid Unicode strings.
     ///
     /// While parsing for parameters, `--` is automatically handled unless disabled.
     pub fn param(&mut self) -> Result<Option<Param>, Error> {
@@ -510,28 +511,28 @@ impl<'it> Parser<'it> {
         }
     }
 
-    /// Parse the current argument as value.
+    /// Parse the current argument as a value.
     ///
     /// This gets a value for both options and positional arguments and tries to
     /// parse it with [`FromStr`].
     ///
-    /// When you should use which method?
+    /// When should you use which method?
     ///
     /// * [`string_value`](Self::string_value) for when you know that you need a string.
     /// * [`value`](Self::value) for if you need something that can be parsed from a string.
-    /// * [`raw_value`](Self::raw_value) for when you need to accept a file system path,
+    /// * [`raw_value`](Self::raw_value) for when you need to accept a filesystem path,
     ///   environment variable value or similar.
     ///
     /// Additionally for some CLIs where you might want to represent optional
-    /// values to parameters, you can also use [`optional_value`](Self::optional_value)
+    /// values for parameters, you can also use [`optional_value`](Self::optional_value),
     /// but the usage of that method is discouraged.
     ///
     /// Note that this method will fail if there are no more arguments.  If you want
-    /// to parse the rest of the values until you are done you can either use
+    /// to parse the rest of the values until you are done, you can either use
     /// [`param`](Self::param) and [`value`](Self::value) alternating, or you can
     /// check with [`finished`](Self::finished) if there are more arguments.
     ///
-    /// Lastly calling this method will always parse a value, even if it looks
+    /// Lastly, calling this method will always parse a value, even if it looks
     /// like an option or end of options marker.  If you don't want that, you can use
     /// [`looks_at_value`](Self::looks_at_value).  This is a basic heuristic
     /// that will return `false` if what it's looking at currently looks like an
@@ -544,7 +545,7 @@ impl<'it> Parser<'it> {
         parse_string(self.string_value()?).map_err(|err| self.augment_error(err))
     }
 
-    /// Parse the current argument as value ensuring it's a valid unicode string.
+    /// Parse the current argument as a value ensuring it's a valid Unicode string.
     ///
     /// This behaves like [`value::<String>`](Self::value) but avoids an extra copy.
     pub fn string_value(&mut self) -> Result<String, Error> {
@@ -553,11 +554,11 @@ impl<'it> Parser<'it> {
 
     /// Parse the current argument as a raw value ([`OsString`]).
     ///
-    /// On unix command lines inputs do not have to be valid unicode.  This is
+    /// On Unix command lines, inputs do not have to be valid Unicode.  This is
     /// typically unlikely to happen but there are situations where you might want
-    /// to accept invalid unicode.  For instance you might have a user working on a
-    /// file system with a misconfigured encoding.  As such it's recommended to use
-    /// this method to accept file names and then convert it into a `PathBuf` or
+    /// to accept invalid Unicode.  For instance, you might have a user working on a
+    /// file system with a misconfigured encoding.  As such, it's recommended to use
+    /// this method to accept filenames and then convert them into a `PathBuf` or
     /// similar.
     pub fn raw_value(&mut self) -> Result<OsString, Error> {
         self.optional_raw_value()
@@ -570,10 +571,10 @@ impl<'it> Parser<'it> {
     ///
     /// Optional values are values directly attached to options in the form
     /// ``-ovalue`` or ``--option=value``, but not ``-o value`` or ``--option
-    /// value``.
+    /// value``.  
     ///
-    /// Creating command line interface with these types of options is generally
-    /// not a good idea and the use of it is strongly discouraged.
+    /// Creating command line interfaces with these types of options is generally
+    /// not a good idea and their use is strongly discouraged.
     pub fn optional_value<V>(&mut self) -> Result<Option<V>, Error>
     where
         V: FromStr,
@@ -585,7 +586,8 @@ impl<'it> Parser<'it> {
             .map_err(|err| self.augment_error(err))
     }
 
-    /// Parse the current argument as an optional value ensuring it's a valid unicode string.
+    /// Parse the current argument as an optional value ensuring it's a valid
+    /// Unicode string.
     ///
     /// This is like [`optional_value`](Self::optional_value) but avoids an
     /// extra copy.
@@ -601,8 +603,9 @@ impl<'it> Parser<'it> {
 
     /// Parse the current argument as a raw optional value ([`OsString`]).
     ///
-    /// See [`optional_value`](Self::optional_value) and
-    /// [`raw_value`](Self::raw_value) for more details.
+    /// This method parses an optional value as an [`OsString`] which can
+    /// contain non-Unicode values.  See [`optional_value`](Self::optional_value)
+    /// and [`raw_value`](Self::raw_value) for more details.
     pub fn optional_raw_value(&mut self) -> Option<OsString> {
         match self.state {
             State::Default | State::ArgPause => None,
@@ -622,9 +625,9 @@ impl<'it> Parser<'it> {
 
     /// Peeks at the current, unparsed raw argument.
     ///
-    /// This lets one implement custom argument parsing bypassing whatever
+    /// This lets one implement custom argument parsing by bypassing whatever
     /// internal state exists.  If the parser is currently in a state where
-    /// raw argument access is not possible, this will return `None`
+    /// raw argument access is not possible, this will return `None`.
     pub fn peek_raw_arg(&self) -> Option<&OsStr> {
         match self.state {
             State::Default | State::ArgPause => self.current_arg.as_deref(),
@@ -632,16 +635,16 @@ impl<'it> Parser<'it> {
         }
     }
 
-    /// This returns the current raw argument and goes one argument forward.
+    /// This returns the current raw argument and advances to the next argument.
     ///
     /// This is similar to [`peek_raw_arg`](Self::peek_raw_arg) but extra
     /// care needs to be taken about the return value.  If `None` is returned
     /// it can also mean that the end of the argument line was reached.  You
-    /// should generally combine this with peaking first to disambiugate.
+    /// should generally combine this with peeking first to disambiguate.
     ///
     /// Unlike [`raw_value`](Self::raw_value) this will not accept values from
-    /// combined arguments (eg: `bar` in `--foo=bar`) and it will not perform
-    /// any state updates.  For instnace if you consume `--` as a raw arg,
+    /// combined arguments (e.g. `bar` in `--foo=bar`) and it will not perform
+    /// any state updates.  For instance if you consume `--` as a raw arg,
     /// it will not flip the [`Flag::OptionsEnabled`] flag.
     pub fn raw_arg(&mut self) -> Option<OsString> {
         match self.state {
@@ -650,15 +653,15 @@ impl<'it> Parser<'it> {
         }
     }
 
-    /// This checks if the parser currently looks at what looks like a normal argument.
+    /// This checks if the parser currently looks at what appears to be a normal argument.
     ///
     /// This will return false if the parser reached the end of the command line
-    /// or if the parser looks at something that looks like an argument.  The parser
-    /// itself never has such a heuristic but for multi-value parsing to options
-    /// this can come in handy.
+    /// or if the parser is looking at something that appears to be an option.  The parser
+    /// itself never uses such a heuristic, but this can be helpful for multi-value parsing
+    /// of options.
     ///
     /// It's generally strongly recommended not to create command line tools that
-    /// depend on such a behavior.
+    /// depend on such behavior.
     pub fn looks_at_value(&self) -> bool {
         let current = match self.current_arg.as_ref() {
             None => return false,
@@ -680,9 +683,9 @@ impl<'it> Parser<'it> {
         }
     }
 
-    /// Returns `true` if the parser reached the end.
+    /// Returns `true` if the parser has reached the end.
     ///
-    /// At that point [`param`](Self::param) will always return `None`
+    /// At that point [`param`](Self::param) will always return `None`,
     /// and [`value`](Self::value) will fail with an error.
     #[inline]
     pub fn finished(&self) -> bool {
