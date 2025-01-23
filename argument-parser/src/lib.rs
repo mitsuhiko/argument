@@ -3,8 +3,7 @@
 //! drive your own parsing.
 //!
 //! The goal of this crate is that it's stable, excellently tested and requires
-//! little updates and maintenance.  The goal is that you can use it and it keeps
-//! working.
+//! little updates and maintenance.   You can use it and it keeps working.
 //!
 //! # Example
 //!

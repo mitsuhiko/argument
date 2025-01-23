@@ -1,7 +1,7 @@
 //! This is a basic example with help page, usage and error printing.
 use argument_parser::{Error, Parser};
 
-const USAGE: &str = "error-printing [-n NUMBER]... [--help]";
+const USAGE: &str = "error-printing [-n NUMBER]... [--shout] [--help]";
 const HELP: &str = "error-printing
 A small example of argument-parser
 

@@ -1,8 +1,11 @@
 # argument-parser
 
 `argument-parser` is a crate that implements an argument parser for command
-lines following POSIX conventions.  It's correct, dead simple, dependency free
-and is built so you can drive your own parsing.
+lines following POSIX conventions.  It's dead simple, dependency free and is
+built so you can drive your own parsing.
+
+The goal of this crate is that it's stable, excellently tested and requires
+little updates and maintenance.  You can use it and it keeps working.
 
 ```rust
 use argument_parser::{Error, Parser};
@@ -26,40 +29,27 @@ fn main() -> Result<(), Error> {
 
 ## Command Line Syntax
 
-This crate implements mostly POSIX compatible parsing conventions with
-focus on correctness.  This also explicitly makes some things harder to
-handle or strongly discourages other things.
+This crate primarily implements POSIX-compatible parsing conventions with a
+focus on correctness.  It also explicitly makes certain tasks more challenging
+to handle or strongly discourages them.
 
 The following conventions are supported:
 
 * Short options (`-q`)
 * Long options (`--verbose`)
-* End of options markers (`--`) (can be disabled with `Flag::HandleDoubleDash`)
+* End-of-options markers (`--`) (can be disabled with `Flag::HandleDoubleDash`)
 * `=` to separate options from long values (`--option=value`)
-* optionally `=` to separate options from long values (`-o=value`) (can be enabled with `Flag::StripShortOptionEqualSign`)
+* Optionally `=` to separate options from short values (`-o=value`)
+  (can be enabled with `Flag::StripShortOptionEqualSign`)
 * Spaces to separate options from values (`--option value`, `-o value`)
 * Unseparated short options (`-ovalue`)
 * Combined short options (`-abc` to mean `-a -b -c`)
-* Options with optional arguments (like GNU sed's `-i`, which can be used standalone or as `-iSUFFIX`) (`Parser::optional_value()`)
-* Options with one or more fixed number of arguments
-* Options with variable number of arguments (`Parser::looks_at_value()`)
-* Allows disabling of numeric options (`-1` handled as argument) (can be enabled with `Flag::DisableNumericOptions`)
-
-## Unicode and Broken Unicode
-
-This library requires that option names are single character points for
-short options or valid unicode strings for long option names.  Arguments
-to options or arguments on the command line however are internally always
-handled as `OsString` so you can create command line interfaces that work
-well in the presence of broken unicode.
-
-Note that unlike lexopt today the system is a bit more strict with unicode.
-In the option name portion of the command line, valid unicode input is
-required or an error is raised.  This is intentional as it makes handling of
-command lines easier and more portable.  `lexopt` will handle broken
-unicode like `foo -a�` as producing a parameter named `�` whereas
-`argument-parser` will issue an unicode error.  Invalid unicode however is
-absolutely permissible in option arguments.
+* Options with optional arguments (like GNU sed's `-i`, which can be used
+  standalone or as `-iSUFFIX`) (`Parser::optional_value()`)
+* Options with one or more fixed numbers of arguments
+* Options with a variable number of arguments (`Parser::looks_at_value()`)
+* Allows disabling of numeric options (`-1` handled as an argument) (can be
+  enabled with `Flag::DisableNumericOptions`)
 
 ## Why?
 
@@ -93,6 +83,21 @@ differences:
 * This crate does not exist in a vacuum, it's part of `argument` which is
   a (slightly) higher level utility to make working with the lower level
   `argument-parser` crate simpler.
+
+## Unicode and Broken Unicode
+
+This library requires that option names be single characters for short options
+or valid Unicode strings for long option names.  However, arguments to options
+or command line arguments are always handled internally as `OsString`, allowing
+you to create command line interfaces that function well even with broken
+Unicode.
+
+Unlike `lexopt`, this library is stricter with Unicode.  In the option name
+portion of the command line, valid Unicode input is required, and an error is
+raised if it is not.  This intentional design choice makes handling command
+lines easier and more portable.  While `lexopt` would handle broken Unicode like
+`foo -a�` by producing a parameter named `�`, `argument-parser` will issue a
+Unicode error.  However, invalid Unicode is permissible in option arguments.
 
 ## Sponsor
 
