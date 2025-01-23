@@ -479,3 +479,119 @@ fn test_optional_vs_regular_value() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[test]
+fn test_value_parsing_edge_cases() -> Result<(), Error> {
+    let mut parser =
+        Parser::from_args(["0", "-0", "true", "false", "127.0.0.1", "::1"].into_iter());
+
+    assert_eq!(parser.value::<i32>()?, 0);
+    assert_eq!(parser.value::<i32>()?, 0);
+    assert!(parser.value::<bool>()?);
+    assert!(!parser.value::<bool>()?);
+    assert!(matches!(parser.value::<IpAddr>()?, IpAddr::V4(_)));
+    assert!(matches!(parser.value::<IpAddr>()?, IpAddr::V6(_)));
+
+    Ok(())
+}
+
+#[test]
+fn test_empty_args() -> Result<(), Error> {
+    let parser = Parser::from_args(Vec::<String>::new().into_iter());
+    assert!(parser.finished());
+    Ok(())
+}
+
+#[test]
+fn test_multiple_long_options() -> Result<(), Error> {
+    let mut parser = Parser::from_args(["--foo=bar", "--baz", "qux", "--flag"].into_iter());
+
+    assert_eq!(parser.param()?, Some(Param::Long("foo".into())));
+    assert_eq!(parser.string_value()?, "bar");
+
+    assert_eq!(parser.param()?, Some(Param::Long("baz".into())));
+    assert_eq!(parser.string_value()?, "qux");
+
+    assert_eq!(parser.param()?, Some(Param::Long("flag".into())));
+    assert!(parser.finished());
+    Ok(())
+}
+
+#[test]
+fn test_combined_short_options() -> Result<(), Error> {
+    let mut parser = Parser::from_args(["-abc", "value"].into_iter());
+
+    assert_eq!(parser.param()?, Some(Param::Short('a')));
+    assert_eq!(parser.param()?, Some(Param::Short('b')));
+    assert_eq!(parser.param()?, Some(Param::Short('c')));
+    assert_eq!(parser.string_value()?, "value");
+
+    Ok(())
+}
+
+#[test]
+fn test_mixed_value_types() -> Result<(), Error> {
+    let mut parser = Parser::from_args(
+        [
+            "--int=42", "--float", "3.17", "--str", "hello", "--bool", "true",
+        ]
+        .into_iter(),
+    );
+
+    assert_eq!(parser.param()?, Some(Param::Long("int".into())));
+    assert_eq!(parser.value::<i32>()?, 42);
+
+    assert_eq!(parser.param()?, Some(Param::Long("float".into())));
+    assert!((parser.value::<f64>()? - 3.17).abs() < f64::EPSILON);
+
+    assert_eq!(parser.param()?, Some(Param::Long("str".into())));
+    assert_eq!(parser.value::<String>()?, "hello");
+
+    assert_eq!(parser.param()?, Some(Param::Long("bool".into())));
+    assert!(parser.value::<bool>()?);
+    Ok(())
+}
+
+#[test]
+fn test_malformed_options() -> Result<(), Error> {
+    let mut parser = Parser::from_args(["-", "--=", "---", "----"].into_iter());
+
+    assert_eq!(parser.param()?, Some(Param::Arg));
+    assert_eq!(parser.string_value()?, "-");
+    assert_eq!(parser.param()?, Some(Param::Long("".into())));
+    assert_eq!(parser.string_value()?, "");
+    assert_eq!(parser.param()?, Some(Param::Long("-".into())));
+    assert_eq!(parser.string_value()?, "----");
+
+    Ok(())
+}
+
+#[test]
+fn test_peek_multiple() -> Result<(), Error> {
+    let mut parser = Parser::from_args(["first", "second", "third"].into_iter());
+
+    assert_eq!(
+        parser.peek_raw_arg().and_then(|x| x.to_str()),
+        Some("first")
+    );
+    assert_eq!(
+        parser.peek_raw_arg().and_then(|x| x.to_str()),
+        Some("first")
+    ); // Multiple peeks should return same value
+    assert_eq!(parser.string_value()?, "first");
+
+    assert_eq!(
+        parser.peek_raw_arg().and_then(|x| x.to_str()),
+        Some("second")
+    );
+    assert_eq!(parser.string_value()?, "second");
+
+    assert_eq!(
+        parser.peek_raw_arg().and_then(|x| x.to_str()),
+        Some("third")
+    );
+    assert_eq!(parser.string_value()?, "third");
+
+    assert!(parser.peek_raw_arg().is_none());
+    Ok(())
+}

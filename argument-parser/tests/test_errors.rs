@@ -120,3 +120,14 @@ fn test_unexpected_param_error() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[test]
+fn test_value_overflow() -> Result<(), Error> {
+    let mut parser = Parser::from_args(["999999999999999999999999"].into_iter());
+    assert_eq!(parser.param()?, Some(Param::Arg));
+    let err = parser.value::<i32>().unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::InvalidValue);
+    assert_eq!(err.to_string(), "invalid value for argument");
+    assert_eq!(format!("{:#}", err), "invalid value for argument: \"999999999999999999999999\" (number too large to fit in target type)");
+    Ok(())
+}
