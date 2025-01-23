@@ -41,9 +41,8 @@ fn cli() -> Result<(), Error> {
         } else if param.is_long("verbose") {
             settings.verbose = true;
             settings.quiet = false;
-        } else if param.is_long("help") {
-            println!("{}", HELP);
-            std::process::exit(0);
+        } else if param.is_either('h', "help") {
+            break;
         } else if param.is_arg() {
             let value = parser.string_value()?;
             match value.as_str() {
@@ -85,9 +84,9 @@ fn install(settings: GlobalSettings, mut parser: Parser) -> Result<(), Error> {
             package = Some(parser.string_value()?);
         } else if param.is_long("root") {
             root = Some(parser.value()?);
-        } else if param.is_short('j') || param.is_long("jobs") {
+        } else if param.is_either('j', "jobs") {
             jobs = parser.value()?;
-        } else if param.is_long("help") {
+        } else if param.is_either('h', "help") {
             println!("cargo install [OPTIONS] CRATE");
             std::process::exit(0);
         } else {
