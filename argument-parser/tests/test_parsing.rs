@@ -595,3 +595,34 @@ fn test_peek_multiple() -> Result<(), Error> {
     assert!(parser.peek_raw_arg().is_none());
     Ok(())
 }
+
+#[test]
+fn test_combined_short_options_with_values() -> Result<(), Error> {
+    let mut parser = Parser::from_args(["-abcvalue"].into_iter());
+    assert_eq!(parser.param()?, Some(Param::Short('a')));
+    assert_eq!(parser.param()?, Some(Param::Short('b')));
+    assert_eq!(parser.param()?, Some(Param::Short('c')));
+    assert_eq!(parser.string_value()?, "value");
+    Ok(())
+}
+
+#[test]
+fn test_large_number_handling() -> Result<(), Error> {
+    let mut parser = Parser::from_args(["--large-int", "18446744073709551615"].into_iter());
+    assert_eq!(parser.param()?, Some(Param::Long("large-int".into())));
+    assert_eq!(parser.value::<u64>()?, 18446744073709551615);
+    Ok(())
+}
+
+#[test]
+fn test_platform_specific_behavior() -> Result<(), Error> {
+    let invalid_unicode = make_invalid_unicode_os_string();
+    let mut parser = Parser::from_args([invalid_unicode.clone()].into_iter());
+    assert_eq!(parser.param()?, Some(Param::Arg));
+    assert!(parser.string_value().is_err()); // Should fail string parsing
+
+    let mut parser = Parser::from_args([invalid_unicode.clone()].into_iter());
+    assert_eq!(parser.param()?, Some(Param::Arg));
+    assert_eq!(parser.raw_value()?, invalid_unicode); // But raw value works
+    Ok(())
+}
