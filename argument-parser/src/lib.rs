@@ -108,6 +108,11 @@ use std::path::Path;
 use std::str::{from_utf8, from_utf8_unchecked, FromStr};
 
 /// Represents a parsing error.
+///
+/// Errors can be printed in two forms.  The regular form (`{}`) displays only
+/// the error message and parameter name.  The alternative form (`{:#}`)
+/// additionally displays the parameter value and the first source error if one
+/// exists.
 pub struct Error(Box<ErrorRepr>);
 
 impl Error {
@@ -197,12 +202,21 @@ impl fmt::Display for Error {
             (MissingValue, None) => write!(f, "missing argument"),
             (InvalidUnicode, Some(x)) => write!(f, "argument for {} contains invalid unicode", x),
             (InvalidUnicode, None) => write!(f, "argument contains invalid unicode"),
-            (InvalidValue, Some(x)) => write!(f, "argument for {} is invalid", x),
-            (InvalidValue, None) => write!(f, "argument is invalid"),
+            (InvalidValue, Some(x)) => write!(f, "invalid value for {}", x),
+            (InvalidValue, None) => write!(f, "invalid value for argument"),
             (UnexpectedParameter, Some(x)) => write!(f, "unexpected argument {}", x),
             (UnexpectedParameter, None) => write!(f, "unexpected argument"),
             (Custom, _) => write!(f, "{}", self.0.value.as_ref().unwrap().as_ref().unwrap()),
+        }?;
+        if f.alternate() {
+            if let Some(val) = self.raw_value() {
+                write!(f, ": {:?}", val)?;
+            }
+            if let Some(source) = self.source() {
+                write!(f, " ({})", source)?;
+            }
         }
+        Ok(())
     }
 }
 
