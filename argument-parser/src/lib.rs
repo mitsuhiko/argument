@@ -663,7 +663,7 @@ impl<'it> Parser<'it> {
                 }
                 State::ShortOptChain(ref mut pos) => {
                     let arg = self.current_arg.as_deref().unwrap();
-                    return match os_str_char_at(arg, *pos)? {
+                    match os_str_char_at(arg, *pos)? {
                         None => {
                             self.next_arg_and_reset_state();
                             continue;
@@ -673,7 +673,7 @@ impl<'it> Parser<'it> {
                             if *pos >= arg.len() {
                                 self.next_arg_and_reset_state();
                             }
-                            Ok(Some(Param::Short(ch)))
+                            return Ok(Some(Param::Short(ch)));
                         }
                     };
                 }
