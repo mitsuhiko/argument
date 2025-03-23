@@ -734,7 +734,7 @@ impl<'it> Parser<'it> {
         arg_bytes.len() > 1
             && arg_bytes.first() == Some(&b'-')
             && (!self.get_flag(Flag::DisableNumericOptions)
-                || arg_bytes.get(1).map_or(true, |x| !x.is_ascii_digit()))
+                || arg_bytes.get(1).is_none_or(|x| !x.is_ascii_digit()))
     }
 
     /// Attach the name of the current parameter to the error if needed.
