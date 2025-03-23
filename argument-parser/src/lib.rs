@@ -98,7 +98,7 @@
 //! This crate makes a best effort at error reporting, but higher level abstractions
 //! should be used to improve the user experience.  Error messages might indicate
 //! the wrong parameters if raw argument parsing is used.
-use std::error::Error as StdError;
+use std::error::Error as _;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::iter::once;
@@ -170,7 +170,7 @@ impl Error {
         self
     }
 
-    fn with_source(mut self, source: Box<dyn StdError + Send + Sync + 'static>) -> Error {
+    fn with_source(mut self, source: Box<dyn std::error::Error + Send + Sync + 'static>) -> Error {
         self.0.source = Some(source);
         self
     }
@@ -231,8 +231,8 @@ impl fmt::Debug for Error {
     }
 }
 
-impl StdError for Error {
-    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self.0.source {
             Some(ref source) => Some(&**source),
             None => None,
@@ -244,7 +244,7 @@ struct ErrorRepr {
     kind: ErrorKind,
     param: Option<Param>,
     value: Option<Result<String, OsString>>,
-    source: Option<Box<dyn StdError + Send + Sync + 'static>>,
+    source: Option<Box<dyn std::error::Error + Send + Sync + 'static>>,
 }
 
 /// Represents the type of parsing error.
@@ -490,7 +490,7 @@ impl<'it> Parser<'it> {
     pub fn value<V>(&mut self) -> Result<V, Error>
     where
         V: FromStr,
-        V::Err: Into<Box<dyn StdError + Send + Sync + 'static>>,
+        V::Err: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
     {
         parse_string(self.string_value()?).map_err(|err| self.augment_error(err))
     }
@@ -528,7 +528,7 @@ impl<'it> Parser<'it> {
     pub fn optional_value<V>(&mut self) -> Result<Option<V>, Error>
     where
         V: FromStr,
-        V::Err: Into<Box<dyn StdError + Send + Sync + 'static>>,
+        V::Err: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
     {
         self.optional_string_value()?
             .map(parse_string)
@@ -751,7 +751,7 @@ impl<'it> Parser<'it> {
 fn parse_string<V>(value: String) -> Result<V, Error>
 where
     V: FromStr,
-    V::Err: Into<Box<dyn StdError + Send + Sync + 'static>>,
+    V::Err: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
 {
     V::from_str(&value).map_err(|err| {
         Error::new(ErrorKind::InvalidValue)
