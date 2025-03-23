@@ -16,7 +16,7 @@ fn main() -> Result<(), Error> {
     while let Some(param) = parser.param()? {
         if param.is_short('n') || param.is_long("number") {
             println!("Got number {}", parser.value::<i32>()?);
-        } else if param.is_arg() {
+        } else if param.is_pos() {
             println!("Got arg {}", parser.string_value()?);
         } else {
             return Err(param.into_unexpected_error());

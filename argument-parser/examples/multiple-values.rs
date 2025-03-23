@@ -17,7 +17,7 @@ fn main() -> Result<(), Error> {
             return Ok(());
         } else if param.is_short('v') {
             verbosity += 1;
-        } else if param.is_arg() {
+        } else if param.is_pos() {
             extra.push(parser.string_value()?);
         } else {
             return Err(param.into_unexpected_error());

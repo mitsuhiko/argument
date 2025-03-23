@@ -149,10 +149,10 @@ fn execute() -> Result<(), Error> {
                 println!("minijinja version 1.0.0");
                 return Ok(());
             }
-            p if p.is_arg() && template_file.is_none() => {
+            p if p.is_pos() && template_file.is_none() => {
                 template_file = Some(PathBuf::from(parser.raw_value()?));
             }
-            p if p.is_arg() && data_file.is_none() => {
+            p if p.is_pos() && data_file.is_none() => {
                 data_file = Some(PathBuf::from(parser.raw_value()?));
             }
             p => return Err(p.into_unexpected_error()),

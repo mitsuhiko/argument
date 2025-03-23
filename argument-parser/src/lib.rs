@@ -18,7 +18,7 @@
 //!     while let Some(param) = parser.param()? {
 //!         if param.is_short('n') || param.is_long("number") {
 //!             println!("Got number {}", parser.value::<i32>()?);
-//!         } else if param.is_arg() {
+//!         } else if param.is_pos() {
 //!             println!("Got arg {}", parser.string_value()?);
 //!         } else {
 //!             return Err(param.into_unexpected_error());
@@ -42,7 +42,7 @@
 //! * [`Param`] can be deconstructed (it's an enum) and it provides utilities:
 //!   * [`Param::is_short`] checks if a parameter is a specific short option.
 //!   * [`Param::is_long`] checks if a parameter is a specific long option.
-//!   * [`Param::is_arg`] checks if a parameter is a positional argument.
+//!   * [`Param::is_pos`] checks if a parameter is a positional argument.
 //! * [`Parser::value`] pulls a single value from the parser and parses it with [`FromStr`].
 //! * [`Parser::string_value`] pulls a single string value from the parser.
 //! * [`Param::into_unexpected_error`] propagates an "unexpected argument" error.
@@ -275,7 +275,7 @@ pub enum Param {
     /// This parameter is a long option
     Long(String),
     /// This parameter is a positional argument
-    Arg,
+    Pos,
 }
 
 impl Param {
@@ -283,7 +283,7 @@ impl Param {
     pub fn is_short(&self, c: char) -> bool {
         match self {
             Param::Short(r) => c == *r,
-            Param::Long(_) | Param::Arg => false,
+            Param::Long(_) | Param::Pos => false,
         }
     }
 
@@ -291,7 +291,7 @@ impl Param {
     pub fn is_long(&self, s: &str) -> bool {
         match self {
             Param::Long(r) => r == s,
-            Param::Short(_) | Param::Arg => false,
+            Param::Short(_) | Param::Pos => false,
         }
     }
 
@@ -303,8 +303,8 @@ impl Param {
     }
 
     /// Is this a positional argument?
-    pub fn is_arg(&self) -> bool {
-        matches!(self, Param::Arg)
+    pub fn is_pos(&self) -> bool {
+        matches!(self, Param::Pos)
     }
 
     /// Consumes the parameter and creates an unexpected error.
@@ -725,7 +725,7 @@ impl<'it> Parser<'it> {
         if self.get_flag(Flag::DisableOptionsAfterArgs) {
             self.set_flag(Flag::OptionsEnabled, false);
         }
-        Param::Arg
+        Param::Pos
     }
 
     /// Should we consider the given argument as an option?

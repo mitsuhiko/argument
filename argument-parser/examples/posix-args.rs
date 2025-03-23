@@ -11,7 +11,7 @@ fn main() -> Result<(), Error> {
             println!("Got number {}", parser.value::<i32>()?);
         } else if param.is_long("shout") {
             println!("Got --shout");
-        } else if param.is_arg() {
+        } else if param.is_pos() {
             args.push(parser.string_value()?);
         } else {
             return Err(param.into_unexpected_error());

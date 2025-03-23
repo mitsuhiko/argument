@@ -43,7 +43,7 @@ fn cli() -> Result<(), Error> {
             settings.quiet = false;
         } else if param.is_either('h', "help") {
             break;
-        } else if param.is_arg() {
+        } else if param.is_pos() {
             let value = parser.string_value()?;
             match value.as_str() {
                 value if value.starts_with('+') => {
@@ -80,7 +80,7 @@ fn install(settings: GlobalSettings, mut parser: Parser) -> Result<(), Error> {
     let mut jobs: u16 = get_no_of_cpus();
 
     while let Some(param) = parser.param()? {
-        if param.is_arg() && package.is_none() {
+        if param.is_pos() && package.is_none() {
             package = Some(parser.string_value()?);
         } else if param.is_long("root") {
             root = Some(parser.value()?);

@@ -114,7 +114,7 @@ fn test_unexpected_param_error() -> Result<(), Error> {
     assert_eq!(err.kind(), ErrorKind::UnexpectedParameter);
     assert_eq!(err.to_string(), "unexpected argument '--test'");
 
-    let err = Param::Arg.into_unexpected_error();
+    let err = Param::Pos.into_unexpected_error();
     assert_eq!(err.kind(), ErrorKind::UnexpectedParameter);
     assert_eq!(err.to_string(), "unexpected argument");
 
@@ -124,7 +124,7 @@ fn test_unexpected_param_error() -> Result<(), Error> {
 #[test]
 fn test_value_overflow() -> Result<(), Error> {
     let mut parser = Parser::from_args(["999999999999999999999999"].into_iter());
-    assert_eq!(parser.param()?, Some(Param::Arg));
+    assert_eq!(parser.param()?, Some(Param::Pos));
     let err = parser.value::<i32>().unwrap_err();
     assert_eq!(err.kind(), ErrorKind::InvalidValue);
     assert_eq!(err.to_string(), "invalid value for argument");
