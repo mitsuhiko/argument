@@ -100,7 +100,7 @@ use std::error::Error as _;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::iter::once;
-use std::mem::{replace, ManuallyDrop};
+use std::mem::{replace, transmute_copy, ManuallyDrop};
 use std::path::Path;
 use std::str::{from_utf8, from_utf8_unchecked, FromStr};
 
@@ -725,14 +725,14 @@ fn parse_string<V: Parsable>(value: String) -> Result<V, Error> {
     // and we want to convert into a string.  Ideally we could directly
     // use transmute but that is not possible today due to compiler limitations.
     if std::any::TypeId::of::<V>() == std::any::TypeId::of::<String>() {
-        return Ok(unsafe { std::mem::transmute_copy(&ManuallyDrop::new(value)) });
+        Ok(unsafe { transmute_copy(&ManuallyDrop::new(value)) })
+    } else {
+        V::from_str(&value).map_err(|err| {
+            Error::new(ErrorKind::InvalidValue)
+                .with_string(value)
+                .with_source(err.into())
+        })
     }
-
-    V::from_str(&value).map_err(|err| {
-        Error::new(ErrorKind::InvalidValue)
-            .with_string(value)
-            .with_source(err.into())
-    })
 }
 
 /// Alias for a value that can be parsed by this crate.
