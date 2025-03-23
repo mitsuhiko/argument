@@ -44,7 +44,7 @@ fn cli() -> Result<(), Error> {
         } else if param.is_either('h', "help") {
             break;
         } else if param.is_pos() {
-            let value = parser.string_value()?;
+            let value: String = parser.value()?;
             match value.as_str() {
                 value if value.starts_with('+') => {
                     settings.toolchain = value[1..].to_owned();
@@ -81,7 +81,7 @@ fn install(settings: GlobalSettings, mut parser: Parser) -> Result<(), Error> {
 
     while let Some(param) = parser.param()? {
         if param.is_pos() && package.is_none() {
-            package = Some(parser.string_value()?);
+            package = Some(parser.value()?);
         } else if param.is_long("root") {
             root = Some(parser.value()?);
         } else if param.is_either('j', "jobs") {

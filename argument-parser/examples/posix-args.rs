@@ -4,7 +4,7 @@ use argument_parser::{Error, Flag, Parser};
 fn main() -> Result<(), Error> {
     let mut parser = Parser::from_env();
     parser.set_flag(Flag::DisableOptionsAfterArgs, true);
-    let mut args = Vec::new();
+    let mut args = Vec::<String>::new();
 
     while let Some(param) = parser.param()? {
         if param.is_short('n') || param.is_long("number") {
@@ -12,7 +12,7 @@ fn main() -> Result<(), Error> {
         } else if param.is_long("shout") {
             println!("Got --shout");
         } else if param.is_pos() {
-            args.push(parser.string_value()?);
+            args.push(parser.value()?);
         } else {
             return Err(param.into_unexpected_error());
         }

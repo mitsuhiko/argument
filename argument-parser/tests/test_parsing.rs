@@ -76,12 +76,12 @@ fn test_handle_double_dash() -> Result<(), Error> {
     let mut parser = Parser::from_args(["-n23", "--", "-n42", "meh"].into_iter());
     assert!(parser.get_flag(Flag::HandleDoubleDash));
     let mut num = 0;
-    let mut args = Vec::new();
+    let mut args = Vec::<String>::new();
     while let Some(param) = parser.param()? {
         if param.is_short('n') {
             num = parser.value()?;
         } else if param.is_pos() {
-            args.push(parser.string_value()?);
+            args.push(parser.value()?);
         } else {
             return Err(param.into_unexpected_error());
         }
@@ -93,12 +93,12 @@ fn test_handle_double_dash() -> Result<(), Error> {
     parser.set_flag(Flag::HandleDoubleDash, false);
     assert!(!parser.get_flag(Flag::HandleDoubleDash));
     let mut num = 0;
-    let mut args = Vec::new();
+    let mut args = Vec::<String>::new();
     while let Some(param) = parser.param()? {
         if param.is_short('n') {
             num = parser.value()?;
         } else if param.is_pos() {
-            args.push(parser.string_value()?);
+            args.push(parser.value()?);
         } else {
             return Err(param.into_unexpected_error());
         }
@@ -114,12 +114,12 @@ fn test_arguments_disable_options() -> Result<(), Error> {
     let mut parser = Parser::from_args(["-n23", "foo", "-n42"].into_iter());
     assert!(!parser.get_flag(Flag::DisableOptionsAfterArgs));
     let mut num = 0;
-    let mut args = Vec::new();
+    let mut args = Vec::<String>::new();
     while let Some(param) = parser.param()? {
         if param.is_short('n') {
             num = parser.value()?;
         } else if param.is_pos() {
-            args.push(parser.string_value()?);
+            args.push(parser.value()?);
         } else {
             return Err(param.into_unexpected_error());
         }
@@ -131,12 +131,12 @@ fn test_arguments_disable_options() -> Result<(), Error> {
     parser.set_flag(Flag::DisableOptionsAfterArgs, true);
     assert!(parser.get_flag(Flag::DisableOptionsAfterArgs));
     let mut num = 0;
-    let mut args = Vec::new();
+    let mut args = Vec::<String>::new();
     while let Some(param) = parser.param()? {
         if param.is_short('n') {
             num = parser.value()?;
         } else if param.is_pos() {
-            args.push(parser.string_value()?);
+            args.push(parser.value()?);
         } else {
             return Err(param.into_unexpected_error());
         }
@@ -153,14 +153,14 @@ fn test_disallow_numeric_options() -> Result<(), Error> {
     assert!(!parser.get_flag(Flag::DisableNumericOptions));
     let mut num = 0;
     let mut known_numeric_shorts = 0;
-    let mut args = Vec::new();
+    let mut args = Vec::<String>::new();
     while let Some(param) = parser.param()? {
         if param.is_short('n') {
             num = parser.value()?;
         } else if param.is_short('1') || param.is_short('2') || param.is_short('3') {
             known_numeric_shorts += 1;
         } else if param.is_pos() {
-            args.push(parser.string_value()?);
+            args.push(parser.value()?);
         } else {
             return Err(param.into_unexpected_error());
         }
@@ -175,14 +175,14 @@ fn test_disallow_numeric_options() -> Result<(), Error> {
     assert!(parser.get_flag(Flag::DisableNumericOptions));
     let mut num = 0;
     let mut known_numeric_shorts = 0;
-    let mut args = Vec::new();
+    let mut args = Vec::<String>::new();
     while let Some(param) = parser.param()? {
         if param.is_short('n') {
             num = parser.value()?;
         } else if param.is_short('1') || param.is_short('2') || param.is_short('3') {
             known_numeric_shorts += 1;
         } else if param.is_pos() {
-            args.push(parser.string_value()?);
+            args.push(parser.value()?);
         } else {
             return Err(param.into_unexpected_error());
         }
@@ -204,17 +204,17 @@ fn test_looks_at_value() -> Result<(), Error> {
             parser.set_flag(Flag::DisableNumericOptions, true);
         }
         let mut x = 0;
-        let mut messages = Vec::new();
-        let mut extra = Vec::new();
+        let mut messages = Vec::<String>::new();
+        let mut extra = Vec::<String>::new();
         while let Some(param) = parser.param()? {
             if param.is_short('m') || param.is_long("message") {
                 while parser.looks_at_value() {
-                    messages.push(parser.string_value()?);
+                    messages.push(parser.value()?);
                 }
             } else if param.is_short('x') || param.is_short('1') {
                 x += 1;
             } else if param.is_pos() {
-                extra.push(parser.string_value()?);
+                extra.push(parser.value()?);
             } else {
                 return Err(param.into_unexpected_error());
             }
@@ -276,7 +276,7 @@ fn test_strip_short_option_equal_sign() -> Result<(), Error> {
     let mut parser = Parser::from_args(["-o=42"].into_iter());
     parser.set_flag(Flag::StripShortOptionEqualSign, false);
     assert!(matches!(parser.param()?, Some(Param::Short('o'))));
-    assert_eq!(parser.string_value()?, "=42");
+    assert_eq!(parser.value::<String>()?, "=42");
     assert!(parser.finished());
     Ok(())
 }
@@ -312,30 +312,30 @@ fn test_weird_args() -> Result<(), Error> {
     );
 
     assert_eq!(p.param()?, Some(Param::Pos));
-    assert_eq!(p.string_value()?, "");
+    assert_eq!(p.value::<String>()?, "");
     assert_eq!(p.param()?, Some(Param::Long("-".to_string())));
-    assert_eq!(p.string_value()?, "---");
+    assert_eq!(p.value::<String>()?, "---");
     assert_eq!(p.param()?, Some(Param::Long("-".to_string())));
-    assert_eq!(p.string_value()?, "---");
+    assert_eq!(p.value::<String>()?, "---");
     assert_eq!(p.param()?, Some(Param::Long("".to_string())));
-    assert_eq!(p.string_value()?, "");
+    assert_eq!(p.value::<String>()?, "");
     assert_eq!(p.param()?, Some(Param::Long("".to_string())));
-    assert_eq!(p.string_value()?, "3");
+    assert_eq!(p.value::<String>()?, "3");
     assert_eq!(p.param()?, Some(Param::Pos));
-    assert_eq!(p.string_value()?, "-");
+    assert_eq!(p.value::<String>()?, "-");
     assert_eq!(p.param()?, Some(Param::Short('x')));
-    assert_eq!(p.string_value()?, "--");
+    assert_eq!(p.value::<String>()?, "--");
     assert_eq!(p.param()?, Some(Param::Pos));
-    assert_eq!(p.string_value()?, "-");
+    assert_eq!(p.value::<String>()?, "-");
     assert_eq!(p.param()?, Some(Param::Short('x')));
     assert_eq!(p.param()?, Some(Param::Pos));
-    assert_eq!(p.string_value()?, "");
+    assert_eq!(p.value::<String>()?, "");
     assert_eq!(p.param()?, Some(Param::Pos));
-    assert_eq!(p.string_value()?, "-");
+    assert_eq!(p.value::<String>()?, "-");
     assert_eq!(p.param()?, Some(Param::Pos));
-    assert_eq!(p.string_value()?, "-x");
+    assert_eq!(p.value::<String>()?, "-x");
     assert_eq!(p.param()?, Some(Param::Pos));
-    assert_eq!(p.string_value()?, "---");
+    assert_eq!(p.value::<String>()?, "---");
     assert_eq!(p.param()?, None);
 
     Ok(())
@@ -349,7 +349,7 @@ fn test_invalid_unicode() -> Result<(), Error> {
     // Test invalid unicode in positional argument
     let mut parser = Parser::from_args([invalid_unicode.clone()].into_iter());
     assert_eq!(parser.param()?, Some(Param::Pos));
-    assert!(parser.string_value().is_err()); // Should fail string parsing
+    assert!(parser.value::<String>().is_err()); // Should fail string parsing
     let mut parser = Parser::from_args([invalid_unicode.clone()].into_iter());
     assert_eq!(parser.param()?, Some(Param::Pos));
     assert_eq!(parser.raw_value()?, invalid_unicode); // But raw value works
@@ -357,7 +357,7 @@ fn test_invalid_unicode() -> Result<(), Error> {
     // Test invalid unicode in short option value
     let mut parser = Parser::from_args(["-x".into(), invalid_unicode.clone()].into_iter());
     assert_eq!(parser.param()?, Some(Param::Short('x')));
-    assert!(parser.string_value().is_err()); // Should fail string parsing
+    assert!(parser.value::<String>().is_err()); // Should fail string parsing
     let mut parser = Parser::from_args(["-x".into(), invalid_unicode.clone()].into_iter());
     assert_eq!(parser.param()?, Some(Param::Short('x')));
     assert_eq!(parser.raw_value()?, invalid_unicode); // But raw value works
@@ -367,7 +367,7 @@ fn test_invalid_unicode() -> Result<(), Error> {
     arg.push(&invalid_unicode);
     let mut parser = Parser::from_args([arg.clone()].into_iter());
     assert_eq!(parser.param()?, Some(Param::Short('x')));
-    assert!(parser.string_value().is_err()); // Should fail string parsing
+    assert!(parser.value::<String>().is_err()); // Should fail string parsing
     let mut parser = Parser::from_args([arg].into_iter());
     assert_eq!(parser.param()?, Some(Param::Short('x')));
     assert_eq!(parser.raw_value()?, invalid_unicode); // But raw value works
@@ -375,7 +375,7 @@ fn test_invalid_unicode() -> Result<(), Error> {
     // Test invalid unicode in long option value
     let mut parser = Parser::from_args(["--foo".into(), invalid_unicode.clone()].into_iter());
     assert_eq!(parser.param()?, Some(Param::Long("foo".into())));
-    assert!(parser.string_value().is_err()); // Should fail string parsing
+    assert!(parser.value::<String>().is_err()); // Should fail string parsing
     let mut parser = Parser::from_args(["--foo".into(), invalid_unicode.clone()].into_iter());
     assert_eq!(parser.param()?, Some(Param::Long("foo".into())));
     assert_eq!(parser.raw_value()?, invalid_unicode); // But raw value works
@@ -385,7 +385,7 @@ fn test_invalid_unicode() -> Result<(), Error> {
     arg.push(&invalid_unicode);
     let mut parser = Parser::from_args([arg.clone()].into_iter());
     assert_eq!(parser.param()?, Some(Param::Long("foo".into())));
-    assert!(parser.string_value().is_err()); // Should fail string parsing
+    assert!(parser.value::<String>().is_err()); // Should fail string parsing
     let mut parser = Parser::from_args([arg].into_iter());
     assert_eq!(parser.param()?, Some(Param::Long("foo".into())));
     assert_eq!(parser.raw_value()?, invalid_unicode); // But raw value works
@@ -404,7 +404,7 @@ fn test_raw_arg_options_handling() -> Result<(), Error> {
     // Parse -- as raw arg (doesn't disable options)
     let mut parser = Parser::from_args(["foo", "bar", "--", "-x"].into_iter());
     assert_eq!(parser.raw_arg(), Some("foo".into()));
-    assert_eq!(parser.string_value()?, "bar");
+    assert_eq!(parser.value::<String>()?, "bar");
     assert_eq!(parser.raw_arg(), Some("--".into()));
     assert_eq!(parser.param()?, Some(Param::Short('x')));
     assert!(parser.finished());
@@ -412,9 +412,9 @@ fn test_raw_arg_options_handling() -> Result<(), Error> {
     // Parse -- as string (disables options)
     let mut parser = Parser::from_args(["foo", "bar", "--", "-x"].into_iter());
     assert_eq!(parser.raw_arg(), Some("foo".into()));
-    assert_eq!(parser.string_value()?, "bar");
+    assert_eq!(parser.value::<String>()?, "bar");
     assert_eq!(parser.param()?, Some(Param::Pos));
-    assert_eq!(parser.string_value()?, "-x");
+    assert_eq!(parser.value::<String>()?, "-x");
     assert!(parser.finished());
 
     Ok(())
@@ -425,12 +425,12 @@ fn test_raw_arg_options_peeking() -> Result<(), Error> {
     let mut parser = Parser::from_args(["foo", "-xbar", "blah"].into_iter());
     assert_eq!(parser.param()?, Some(Param::Pos));
     assert_eq!(parser.peek_raw_arg().and_then(|x| x.to_str()), Some("foo"));
-    assert_eq!(parser.string_value()?, "foo");
+    assert_eq!(parser.value::<String>()?, "foo");
     assert_eq!(parser.param()?, Some(Param::Short('x')));
     assert!(parser.peek_raw_arg().is_none());
-    assert_eq!(parser.string_value()?, "bar");
+    assert_eq!(parser.value::<String>()?, "bar");
     assert_eq!(parser.peek_raw_arg().and_then(|x| x.to_str()), Some("blah"));
-    assert_eq!(parser.string_value()?, "blah");
+    assert_eq!(parser.value::<String>()?, "blah");
     Ok(())
 }
 
@@ -442,7 +442,7 @@ fn test_skipped_arg_value() -> Result<(), Error> {
     // first is intentionally lost
 
     assert_eq!(parser.param()?, Some(Param::Pos));
-    assert_eq!(parser.string_value()?, "second");
+    assert_eq!(parser.value::<String>()?, "second");
     assert_eq!(parser.param()?, Some(Param::Long("third".into())));
     // value is intentionally lost
 
@@ -507,10 +507,10 @@ fn test_multiple_long_options() -> Result<(), Error> {
     let mut parser = Parser::from_args(["--foo=bar", "--baz", "qux", "--flag"].into_iter());
 
     assert_eq!(parser.param()?, Some(Param::Long("foo".into())));
-    assert_eq!(parser.string_value()?, "bar");
+    assert_eq!(parser.value::<String>()?, "bar");
 
     assert_eq!(parser.param()?, Some(Param::Long("baz".into())));
-    assert_eq!(parser.string_value()?, "qux");
+    assert_eq!(parser.value::<String>()?, "qux");
 
     assert_eq!(parser.param()?, Some(Param::Long("flag".into())));
     assert!(parser.finished());
@@ -524,7 +524,7 @@ fn test_combined_short_options() -> Result<(), Error> {
     assert_eq!(parser.param()?, Some(Param::Short('a')));
     assert_eq!(parser.param()?, Some(Param::Short('b')));
     assert_eq!(parser.param()?, Some(Param::Short('c')));
-    assert_eq!(parser.string_value()?, "value");
+    assert_eq!(parser.value::<String>()?, "value");
 
     Ok(())
 }
@@ -557,11 +557,11 @@ fn test_malformed_options() -> Result<(), Error> {
     let mut parser = Parser::from_args(["-", "--=", "---", "----"].into_iter());
 
     assert_eq!(parser.param()?, Some(Param::Pos));
-    assert_eq!(parser.string_value()?, "-");
+    assert_eq!(parser.value::<String>()?, "-");
     assert_eq!(parser.param()?, Some(Param::Long("".into())));
-    assert_eq!(parser.string_value()?, "");
+    assert_eq!(parser.value::<String>()?, "");
     assert_eq!(parser.param()?, Some(Param::Long("-".into())));
-    assert_eq!(parser.string_value()?, "----");
+    assert_eq!(parser.value::<String>()?, "----");
 
     Ok(())
 }
@@ -578,19 +578,19 @@ fn test_peek_multiple() -> Result<(), Error> {
         parser.peek_raw_arg().and_then(|x| x.to_str()),
         Some("first")
     ); // Multiple peeks should return same value
-    assert_eq!(parser.string_value()?, "first");
+    assert_eq!(parser.value::<String>()?, "first");
 
     assert_eq!(
         parser.peek_raw_arg().and_then(|x| x.to_str()),
         Some("second")
     );
-    assert_eq!(parser.string_value()?, "second");
+    assert_eq!(parser.value::<String>()?, "second");
 
     assert_eq!(
         parser.peek_raw_arg().and_then(|x| x.to_str()),
         Some("third")
     );
-    assert_eq!(parser.string_value()?, "third");
+    assert_eq!(parser.value::<String>()?, "third");
 
     assert!(parser.peek_raw_arg().is_none());
     Ok(())
@@ -602,7 +602,7 @@ fn test_combined_short_options_with_values() -> Result<(), Error> {
     assert_eq!(parser.param()?, Some(Param::Short('a')));
     assert_eq!(parser.param()?, Some(Param::Short('b')));
     assert_eq!(parser.param()?, Some(Param::Short('c')));
-    assert_eq!(parser.string_value()?, "value");
+    assert_eq!(parser.value::<String>()?, "value");
     Ok(())
 }
 
@@ -619,7 +619,7 @@ fn test_platform_specific_behavior() -> Result<(), Error> {
     let invalid_unicode = make_invalid_unicode_os_string();
     let mut parser = Parser::from_args([invalid_unicode.clone()].into_iter());
     assert_eq!(parser.param()?, Some(Param::Pos));
-    assert!(parser.string_value().is_err()); // Should fail string parsing
+    assert!(parser.value::<String>().is_err()); // Should fail string parsing
 
     let mut parser = Parser::from_args([invalid_unicode.clone()].into_iter());
     assert_eq!(parser.param()?, Some(Param::Pos));

@@ -85,28 +85,28 @@ fn execute() -> Result<(), Error> {
     let mut trim_blocks = false;
     let mut lstrip_blocks = false;
     let mut py_compat = false;
-    let mut syntax = Vec::new();
+    let mut syntax = Vec::<String>::new();
     let mut env = false;
     let mut no_include = false;
     let mut safe_path = None;
     let mut fuel = None::<u64>;
-    let mut expr = None;
+    let mut expr = None::<String>;
     let mut expr_out = String::from("print");
-    let mut dump = None;
+    let mut dump = None::<String>;
     let mut repl = false;
-    let mut template_str = None;
-    let mut defines = Vec::new();
+    let mut template_str = None::<String>;
+    let mut defines = Vec::<String>::new();
 
     while let Some(param) = parser.param()? {
         match param {
             p if p.is_either('o', "output") => output = PathBuf::from(parser.raw_value()?),
-            p if p.is_either('a', "autoescape") => autoescape = parser.string_value()?,
+            p if p.is_either('a', "autoescape") => autoescape = parser.value()?,
             p if p.is_long("strict") => strict = true,
             p if p.is_either('n', "no-newline") => no_newline = true,
             p if p.is_long("trim-blocks") => trim_blocks = true,
             p if p.is_long("lstrip-blocks") => lstrip_blocks = true,
             p if p.is_long("py-compat") => py_compat = true,
-            p if p.is_either('s', "syntax") => syntax.push(parser.string_value()?),
+            p if p.is_either('s', "syntax") => syntax.push(parser.value()?),
             p if p.is_long("env") => env = true,
             p if p.is_long("no-include") => {
                 check_conflict(safe_path.is_some(), &["--no-include", "--safe-path"])?;
@@ -122,13 +122,13 @@ fn execute() -> Result<(), Error> {
                     template_str.is_some() || repl,
                     &["--expr", "--template", "--repl"],
                 )?;
-                expr = Some(parser.string_value()?);
+                expr = Some(parser.value()?);
             }
             p if p.is_long("expr-out") => {
                 check_conflict(expr.is_none(), &["--expr-out without --expr"])?;
-                expr_out = parser.string_value()?;
+                expr_out = parser.value()?;
             }
-            p if p.is_long("dump") => dump = Some(parser.string_value()?),
+            p if p.is_long("dump") => dump = Some(parser.value()?),
             p if p.is_long("repl") => {
                 check_conflict(
                     expr.is_some() || template_str.is_some(),
@@ -138,9 +138,9 @@ fn execute() -> Result<(), Error> {
             }
             p if p.is_either('t', "template") => {
                 check_conflict(expr.is_some() || repl, &["--template", "--expr", "--repl"])?;
-                template_str = Some(parser.string_value()?);
+                template_str = Some(parser.value()?);
             }
-            p if p.is_either('D', "define") => defines.push(parser.string_value()?),
+            p if p.is_either('D', "define") => defines.push(parser.value()?),
             p if p.is_long("help") => {
                 println!("{}", HELP.replace("!!USAGE!!", USAGE));
                 return Ok(());

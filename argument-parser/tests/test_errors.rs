@@ -69,19 +69,19 @@ fn test_invalid_unicode_error() -> Result<(), Error> {
 #[test]
 fn test_missing_positional_error() -> Result<(), Error> {
     let mut parser = Parser::from_args(Vec::<OsString>::new().into_iter());
-    let err = parser.string_value().unwrap_err();
+    let err = parser.value::<String>().unwrap_err();
     assert_eq!(err.kind(), ErrorKind::MissingValue);
     assert_eq!(err.to_string(), "missing argument");
 
     let mut parser = Parser::from_args(["-n"].into_iter());
     assert_eq!(parser.param()?, Some(Param::Short('n')));
-    let err = parser.string_value().unwrap_err();
+    let err = parser.value::<String>().unwrap_err();
     assert_eq!(err.kind(), ErrorKind::MissingValue);
     assert_eq!(err.to_string(), "missing argument for '-n'");
 
     let mut parser = Parser::from_args(["--name"].into_iter());
     assert_eq!(parser.param()?, Some(Param::Long("name".into())));
-    let err = parser.string_value().unwrap_err();
+    let err = parser.value::<String>().unwrap_err();
     assert_eq!(err.kind(), ErrorKind::MissingValue);
     assert_eq!(err.to_string(), "missing argument for '--name'");
     Ok(())

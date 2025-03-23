@@ -12,7 +12,7 @@ fn main() -> Result<(), Error> {
         if param.is_short('n') || param.is_long("number") {
             println!("Got number {}", parser.value::<i32>()?);
         } else if param.is_pos() {
-            println!("Got arg {}", parser.string_value()?);
+            println!("Got arg {}", parser.value::<String>()?);
         } else {
             return Err(param.into_unexpected_error());
         }

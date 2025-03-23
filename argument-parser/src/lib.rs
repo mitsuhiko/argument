@@ -19,7 +19,7 @@
 //!         if param.is_short('n') || param.is_long("number") {
 //!             println!("Got number {}", parser.value::<i32>()?);
 //!         } else if param.is_pos() {
-//!             println!("Got arg {}", parser.string_value()?);
+//!             println!("Got arg {}", parser.value::<String>()?);
 //!         } else {
 //!             return Err(param.into_unexpected_error());
 //!         }
@@ -36,15 +36,13 @@
 //! * [`Parser::param`] pulls parameters from the command line one after another.  If
 //!   the end of the command line is reached, `Ok(None)` is returned.  Reading
 //!   parameters only reads the name (or presence) of the parameter, not the
-//!   value.  To get the value, use [`Parser::value`] (parses via [`FromStr`]),
-//!   [`Parser::string_value`] (converts into a [`String`]), or
+//!   value.  To get the value, use [`Parser::value`] (parses via [`FromStr`]), or
 //!   [`Parser::raw_value`] (just reads the raw [`OsString`]).
 //! * [`Param`] can be deconstructed (it's an enum) and it provides utilities:
 //!   * [`Param::is_short`] checks if a parameter is a specific short option.
 //!   * [`Param::is_long`] checks if a parameter is a specific long option.
 //!   * [`Param::is_pos`] checks if a parameter is a positional argument.
 //! * [`Parser::value`] pulls a single value from the parser and parses it with [`FromStr`].
-//! * [`Parser::string_value`] pulls a single string value from the parser.
 //! * [`Param::into_unexpected_error`] propagates an "unexpected argument" error.
 //!
 //! # Behavior
@@ -93,7 +91,7 @@
 //! When the [`Parser`] encounters an error, it's not recoverable and the parser is
 //! left in an undefined state (e.g., an argument might be lost, future calls
 //! might fail).  For instance, it's not safe to try to call `value::<i32>()` and
-//! fall back to `string_value()` if parsing fails.
+//! fall back to `value::<String>()` if parsing fails.
 //!
 //! This crate makes a best effort at error reporting, but higher level abstractions
 //! should be used to improve the user experience.  Error messages might indicate
@@ -102,7 +100,7 @@ use std::error::Error as _;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::iter::once;
-use std::mem::replace;
+use std::mem::{replace, ManuallyDrop};
 use std::path::Path;
 use std::str::{from_utf8, from_utf8_unchecked, FromStr};
 
@@ -468,7 +466,6 @@ impl<'it> Parser<'it> {
     ///
     /// When should you use which method?
     ///
-    /// * [`string_value`](Self::string_value) for when you know that you need a string.
     /// * [`value`](Self::value) for if you need something that can be parsed from a string.
     /// * [`raw_value`](Self::raw_value) for when you need to accept a filesystem path,
     ///   environment variable value or similar.
@@ -487,19 +484,10 @@ impl<'it> Parser<'it> {
     /// [`looks_at_value`](Self::looks_at_value).  This is a basic heuristic
     /// that will return `false` if what it's looking at currently looks like an
     /// option or the end of the command line was reached.
-    pub fn value<V>(&mut self) -> Result<V, Error>
-    where
-        V: FromStr,
-        V::Err: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
-    {
-        parse_string(self.string_value()?).map_err(|err| self.augment_error(err))
-    }
-
-    /// Parse the current argument as a value ensuring it's a valid Unicode string.
-    ///
-    /// This behaves like [`value::<String>`](Self::value) but avoids an extra copy.
-    pub fn string_value(&mut self) -> Result<String, Error> {
-        os_string_into_string(self.raw_value()?).map_err(|err| self.augment_error(err))
+    pub fn value<V: Parsable>(&mut self) -> Result<V, Error> {
+        os_string_into_string(self.raw_value()?)
+            .and_then(parse_string)
+            .map_err(|err| self.augment_error(err))
     }
 
     /// Parse the current argument as a raw value ([`OsString`]).
@@ -525,28 +513,12 @@ impl<'it> Parser<'it> {
     ///
     /// Creating command line interfaces with these types of options is generally
     /// not a good idea and their use is strongly discouraged.
-    pub fn optional_value<V>(&mut self) -> Result<Option<V>, Error>
-    where
-        V: FromStr,
-        V::Err: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
-    {
-        self.optional_string_value()?
-            .map(parse_string)
-            .transpose()
-            .map_err(|err| self.augment_error(err))
-    }
-
-    /// Parse the current argument as an optional value ensuring it's a valid
-    /// Unicode string.
-    ///
-    /// This is like [`optional_value`](Self::optional_value) but avoids an
-    /// extra copy.
-    pub fn optional_string_value(&mut self) -> Result<Option<String>, Error> {
+    pub fn optional_value<V: Parsable>(&mut self) -> Result<Option<V>, Error> {
         match self.optional_raw_value() {
             Some(value) => os_string_into_string(value)
                 .and_then(parse_string)
-                .map_err(|err| self.augment_error(err))
-                .map(Some),
+                .map(Some)
+                .map_err(|err| self.augment_error(err)),
             None => Ok(None),
         }
     }
@@ -748,16 +720,33 @@ impl<'it> Parser<'it> {
     }
 }
 
-fn parse_string<V>(value: String) -> Result<V, Error>
-where
-    V: FromStr,
-    V::Err: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
-{
+fn parse_string<V: Parsable>(value: String) -> Result<V, Error> {
+    // SAFETY: we can make a fast path here if we know the value is a string
+    // and we want to convert into a string.  Ideally we could directly
+    // use transmute but that is not possible today due to compiler limitations.
+    if std::any::TypeId::of::<V>() == std::any::TypeId::of::<String>() {
+        return Ok(unsafe { std::mem::transmute_copy(&ManuallyDrop::new(value)) });
+    }
+
     V::from_str(&value).map_err(|err| {
         Error::new(ErrorKind::InvalidValue)
             .with_string(value)
             .with_source(err.into())
     })
+}
+
+/// Alias for a value that can be parsed by this crate.
+///
+/// It is implemented for most types that implement [`FromStr`] that have a
+/// an error that is compatible with [`std::error::Error`].
+pub trait Parsable:
+    FromStr<Err: Into<Box<dyn std::error::Error + Send + Sync + 'static>>> + 'static
+{
+}
+
+impl<T: FromStr<Err: Into<Box<dyn std::error::Error + Send + Sync + 'static>>> + 'static> Parsable
+    for T
+{
 }
 
 /// Gets a single unicode character at an offset in the OsStr.
