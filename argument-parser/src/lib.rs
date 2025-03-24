@@ -403,12 +403,6 @@ impl fmt::Debug for Parser<'_> {
     }
 }
 
-impl Default for Parser<'static> {
-    fn default() -> Self {
-        Parser::from_args(None::<String>)
-    }
-}
-
 impl<'it> Parser<'it> {
     /// Creates a parser by using the argments from the current process environment.
     pub fn from_env() -> Parser<'static> {
@@ -465,7 +459,7 @@ impl<'it> Parser<'it> {
     ///
     /// While parsing for parameters, `--` is automatically handled unless disabled.
     pub fn param(&mut self) -> Result<Option<Param>, Error> {
-        self.last_param = self.parse_param().map_err(|err| self.augment_error(err))?;
+        self.last_param = self.parse_param()?;
         Ok(self.last_param.clone())
     }
 
@@ -497,7 +491,7 @@ impl<'it> Parser<'it> {
     pub fn value<V: FromString>(&mut self) -> Result<V, Error> {
         os_string_into_string(self.raw_value()?)
             .and_then(FromString::from_string)
-            .map_err(|err| self.augment_error(err))
+            .map_err(|err| self.attach_param(err))
     }
 
     /// Parse the current argument as a raw value ([`OsString`]).
@@ -512,7 +506,7 @@ impl<'it> Parser<'it> {
         self.optional_raw_value()
             .or_else(|| self.next_arg_and_reset_state())
             .ok_or_else(|| Error::new(ErrorKind::MissingValue))
-            .map_err(|err| self.augment_error(err))
+            .map_err(|err| self.attach_param(err))
     }
 
     /// Parse the current argument as an optional value.
@@ -528,7 +522,7 @@ impl<'it> Parser<'it> {
             Some(value) => os_string_into_string(value)
                 .and_then(FromString::from_string)
                 .map(Some)
-                .map_err(|err| self.augment_error(err)),
+                .map_err(|err| self.attach_param(err)),
             None => Ok(None),
         }
     }
@@ -766,7 +760,7 @@ impl<'it> Parser<'it> {
     }
 
     /// Attach the name of the current parameter to the error if needed.
-    fn augment_error(&self, err: Error) -> Error {
+    fn attach_param(&self, err: Error) -> Error {
         if err.param().is_none() {
             if let Some(ref param) = self.last_param {
                 return err.with_param(param.clone());
