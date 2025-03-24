@@ -19,7 +19,7 @@ fn make_invalid_unicode_os_string() -> OsString {
 #[test]
 fn test_basic() -> Result<(), Error> {
     let this = std::env::current_exe().unwrap();
-    let mut parser = Parser::from_cmdline([this.to_str().unwrap(), "-n23", "-n42"].into_iter());
+    let mut parser = Parser::from_cmdline([this.to_str().unwrap(), "-n23", "-n42"]);
     let mut num = 0;
 
     assert!(!parser.finished());
@@ -148,8 +148,7 @@ fn test_arguments_disable_options() -> Result<(), Error> {
 
 #[test]
 fn test_disallow_numeric_options() -> Result<(), Error> {
-    let mut parser =
-        Parser::from_args(["-n4", "1", "2", "3", "-", "-1", "-2", "-3", "x"]);
+    let mut parser = Parser::from_args(["-n4", "1", "2", "3", "-", "-1", "-2", "-3", "x"]);
     assert!(!parser.get_flag(Flag::DisableNumericOptions));
     let mut num = 0;
     let mut known_numeric_shorts = 0;
@@ -169,8 +168,7 @@ fn test_disallow_numeric_options() -> Result<(), Error> {
     assert_eq!(known_numeric_shorts, 3);
     assert_eq!(args, vec!["1", "2", "3", "-", "x"]);
 
-    let mut parser =
-        Parser::from_args(["-n4", "1", "2", "3", "-", "-1", "-2", "-3", "x"]);
+    let mut parser = Parser::from_args(["-n4", "1", "2", "3", "-", "-1", "-2", "-3", "x"]);
     parser.set_flag(Flag::DisableNumericOptions, true);
     assert!(parser.get_flag(Flag::DisableNumericOptions));
     let mut num = 0;
@@ -303,12 +301,10 @@ fn test_parse_two_values_for_option() -> Result<(), Error> {
 
 #[test]
 fn test_weird_args() -> Result<(), Error> {
-    let mut p = Parser::from_args(
-        [
-            "", "---=---", "---", "---", "--=", "--=3", "-", "-x", "--", "-", "-x", "--", "", "-",
-            "-x", "---",
-        ],
-    );
+    let mut p = Parser::from_args([
+        "", "---=---", "---", "---", "--=", "--=3", "-", "-x", "--", "-", "-x", "--", "", "-",
+        "-x", "---",
+    ]);
 
     assert_eq!(p.param()?, Some(Param::Pos));
     assert_eq!(p.value::<String>()?, "");
@@ -481,8 +477,7 @@ fn test_optional_vs_regular_value() -> Result<(), Error> {
 
 #[test]
 fn test_value_parsing_edge_cases() -> Result<(), Error> {
-    let mut parser =
-        Parser::from_args(["0", "-0", "true", "false", "127.0.0.1", "::1"]);
+    let mut parser = Parser::from_args(["0", "-0", "true", "false", "127.0.0.1", "::1"]);
 
     assert_eq!(parser.value::<i32>()?, 0);
     assert_eq!(parser.value::<i32>()?, 0);
@@ -530,11 +525,9 @@ fn test_combined_short_options() -> Result<(), Error> {
 
 #[test]
 fn test_mixed_value_types() -> Result<(), Error> {
-    let mut parser = Parser::from_args(
-        [
-            "--int=42", "--float", "3.17", "--str", "hello", "--bool", "true",
-        ],
-    );
+    let mut parser = Parser::from_args([
+        "--int=42", "--float", "3.17", "--str", "hello", "--bool", "true",
+    ]);
 
     assert_eq!(parser.param()?, Some(Param::Long("int".into())));
     assert_eq!(parser.value::<i32>()?, 42);

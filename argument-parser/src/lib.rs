@@ -419,10 +419,10 @@ impl<'it> Parser<'it> {
     /// The first argument must be the name of the program.
     pub fn from_cmdline<I, S>(args: I) -> Parser<'it>
     where
-        I: Iterator<Item = S> + 'it,
+        I: IntoIterator<Item = S> + 'it,
         S: Into<OsString> + 'it,
     {
-        let mut args = args.map(Into::into);
+        let mut args = args.into_iter().map(Into::into);
         Parser {
             prog: args.next().unwrap_or_default(),
             current_arg: args.next(),
