@@ -28,7 +28,7 @@ fn execute() -> Result<(), Error> {
             println!("{}", HELP.replace("!!USAGE!!", USAGE));
             return Ok(());
         } else {
-            return Err(param.into_unexpected_error());
+            return Err(parser.unexpected(param));
         }
     }
 

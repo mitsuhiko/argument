@@ -21,7 +21,7 @@
 //!         } else if param.is_pos() {
 //!             println!("Got arg {}", parser.value::<String>()?);
 //!         } else {
-//!             return Err(param.into_unexpected_error());
+//!             return Err(parser.unexpected(param));
 //!         }
 //!     }
 //!
@@ -43,7 +43,7 @@
 //!   * [`Param::is_long`] checks if a parameter is a specific long option.
 //!   * [`Param::is_pos`] checks if a parameter is a positional argument.
 //! * [`Parser::value`] pulls a single value from the parser and parses it with [`FromString`].
-//! * [`Param::into_unexpected_error`] propagates an "unexpected argument" error.
+//! * [`Parser::unexpected`] crates an "unexpected argument" error for the parameter.
 //!
 //! # Behavior
 //!
@@ -203,8 +203,8 @@ impl fmt::Display for Error {
             (InvalidUnicode, None) => write!(f, "argument contains invalid unicode"),
             (InvalidValue, Some(x)) => write!(f, "invalid value for {}", x),
             (InvalidValue, None) => write!(f, "invalid value for argument"),
-            (UnexpectedParameter, Some(x)) => write!(f, "unexpected argument {}", x),
-            (UnexpectedParameter, None) => write!(f, "unexpected argument"),
+            (UnexpectedParam, Some(x)) => write!(f, "unexpected argument {}", x),
+            (UnexpectedParam, None) => write!(f, "unexpected argument"),
             (Custom, _) => write!(f, "{}", self.0.value.as_ref().unwrap().as_ref().unwrap()),
         }?;
         if f.alternate() {
@@ -257,8 +257,8 @@ pub enum ErrorKind {
     InvalidUnicode,
     /// Happens when parsing a parameter into another type and parsing failed.
     InvalidValue,
-    /// Created by [`Param::into_unexpected_error`].
-    UnexpectedParameter,
+    /// Created by [`Parser::unexpected`].
+    UnexpectedParam,
     /// A custom error message
     Custom,
 }
@@ -305,11 +305,6 @@ impl Param {
     /// Is this a positional argument?
     pub fn is_pos(&self) -> bool {
         matches!(self, Param::Pos)
-    }
-
-    /// Consumes the parameter and creates an unexpected error.
-    pub fn into_unexpected_error(self) -> Error {
-        Error::new(ErrorKind::UnexpectedParameter).with_param(self)
     }
 }
 
@@ -603,6 +598,22 @@ impl<'it> Parser<'it> {
     #[inline]
     pub fn finished(&self) -> bool {
         self.current_arg.is_none()
+    }
+
+    /// Creates an unexpected parameter error.
+    ///
+    /// This crates a default [`ErrorKind::UnexpectedParam`] error with the
+    /// information of the parameter filled in.  For positional parameters the
+    /// current raw value is also filled in.
+    pub fn unexpected(&mut self, param: Param) -> Error {
+        let add_value = param.is_pos();
+        let err = Error::new(ErrorKind::UnexpectedParam).with_param(param);
+        if add_value {
+            if let Ok(raw_arg) = self.raw_value() {
+                return err.with_os_string(raw_arg);
+            }
+        }
+        err
     }
 
     /// Check if a parsing [`Flag`] is currently set.

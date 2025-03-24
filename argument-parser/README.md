@@ -19,7 +19,7 @@ fn main() -> Result<(), Error> {
         } else if param.is_pos() {
             println!("Got arg {}", parser.value::<String>()?);
         } else {
-            return Err(param.into_unexpected_error());
+            return Err(parser.unexpected(param));
         }
     }
 

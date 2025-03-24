@@ -20,7 +20,7 @@ fn main() -> Result<(), Error> {
         } else if param.is_pos() {
             extra.push(parser.value()?);
         } else {
-            return Err(param.into_unexpected_error());
+            return Err(parser.unexpected(param));
         }
     }
 

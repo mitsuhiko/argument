@@ -106,17 +106,20 @@ fn test_custom_error() -> Result<(), Error> {
 
 #[test]
 fn test_unexpected_param_error() -> Result<(), Error> {
-    let err = Param::Short('x').into_unexpected_error();
-    assert_eq!(err.kind(), ErrorKind::UnexpectedParameter);
+    let mut p = Parser::from_args(vec!["pos"].into_iter());
+
+    let err = p.unexpected(Param::Short('x'));
+    assert_eq!(err.kind(), ErrorKind::UnexpectedParam);
     assert_eq!(err.to_string(), "unexpected argument '-x'");
 
-    let err = Param::Long("test".into()).into_unexpected_error();
-    assert_eq!(err.kind(), ErrorKind::UnexpectedParameter);
+    let err = p.unexpected(Param::Long("test".into()));
+    assert_eq!(err.kind(), ErrorKind::UnexpectedParam);
     assert_eq!(err.to_string(), "unexpected argument '--test'");
 
-    let err = Param::Pos.into_unexpected_error();
-    assert_eq!(err.kind(), ErrorKind::UnexpectedParameter);
+    let err = p.unexpected(Param::Pos);
+    assert_eq!(err.kind(), ErrorKind::UnexpectedParam);
     assert_eq!(err.to_string(), "unexpected argument");
+    assert_eq!(err.value(), Some("pos"));
 
     Ok(())
 }

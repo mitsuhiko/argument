@@ -28,7 +28,7 @@ fn test_basic() -> Result<(), Error> {
         if param.is_short('n') {
             num = parser.value()?;
         } else {
-            return Err(param.into_unexpected_error());
+            return Err(parser.unexpected(param));
         }
     }
     assert!(parser.finished());
@@ -83,7 +83,7 @@ fn test_handle_double_dash() -> Result<(), Error> {
         } else if param.is_pos() {
             args.push(parser.value()?);
         } else {
-            return Err(param.into_unexpected_error());
+            return Err(parser.unexpected(param));
         }
     }
     assert_eq!(num, 23);
@@ -100,7 +100,7 @@ fn test_handle_double_dash() -> Result<(), Error> {
         } else if param.is_pos() {
             args.push(parser.value()?);
         } else {
-            return Err(param.into_unexpected_error());
+            return Err(parser.unexpected(param));
         }
     }
     assert_eq!(num, 42);
@@ -121,7 +121,7 @@ fn test_arguments_disable_options() -> Result<(), Error> {
         } else if param.is_pos() {
             args.push(parser.value()?);
         } else {
-            return Err(param.into_unexpected_error());
+            return Err(parser.unexpected(param));
         }
     }
     assert_eq!(num, 42);
@@ -138,7 +138,7 @@ fn test_arguments_disable_options() -> Result<(), Error> {
         } else if param.is_pos() {
             args.push(parser.value()?);
         } else {
-            return Err(param.into_unexpected_error());
+            return Err(parser.unexpected(param));
         }
     }
     assert_eq!(num, 23);
@@ -162,7 +162,7 @@ fn test_disallow_numeric_options() -> Result<(), Error> {
         } else if param.is_pos() {
             args.push(parser.value()?);
         } else {
-            return Err(param.into_unexpected_error());
+            return Err(parser.unexpected(param));
         }
     }
     assert_eq!(num, 4);
@@ -184,7 +184,7 @@ fn test_disallow_numeric_options() -> Result<(), Error> {
         } else if param.is_pos() {
             args.push(parser.value()?);
         } else {
-            return Err(param.into_unexpected_error());
+            return Err(parser.unexpected(param));
         }
     }
     assert_eq!(num, 4);
@@ -216,7 +216,7 @@ fn test_looks_at_value() -> Result<(), Error> {
             } else if param.is_pos() {
                 extra.push(parser.value()?);
             } else {
-                return Err(param.into_unexpected_error());
+                return Err(parser.unexpected(param));
             }
         }
         Ok((x, messages, extra))
@@ -292,7 +292,7 @@ fn test_parse_two_values_for_option() -> Result<(), Error> {
             let y = parser.value()?;
             points.push((x, y));
         } else {
-            return Err(param.into_unexpected_error());
+            return Err(parser.unexpected(param));
         }
     }
 
