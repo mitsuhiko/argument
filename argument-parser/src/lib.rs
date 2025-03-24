@@ -414,9 +414,10 @@ impl<'it> Parser<'it> {
         Parser::from_cmdline(std::env::args_os())
     }
 
-    /// Creates a parser from the given split command line.
+    /// Creates a parser from the given command line arguments including program name.
     ///
-    /// The first argument must be the name of the program.
+    /// The first argument must be the name of the program.  If you only have the
+    /// arguments but not the command name, you can use [`from_args`](Self::from_args).
     pub fn from_cmdline<I, S>(args: I) -> Parser<'it>
     where
         I: IntoIterator<Item = S> + 'it,
@@ -433,9 +434,10 @@ impl<'it> Parser<'it> {
         }
     }
 
-    /// Creates a parser from just the arguments.
+    /// Creates a parser from the given arguments.
     ///
-    /// In this case the program name is empty.
+    /// This is different to [`from_cmdline`](Self::from_cmdline) in that the program
+    /// name is not supplied and always empty.
     pub fn from_args<I, S>(args: I) -> Parser<'it>
     where
         I: IntoIterator<Item = S> + 'it,
