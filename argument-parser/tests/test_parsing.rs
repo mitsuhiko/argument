@@ -38,7 +38,7 @@ fn test_basic() -> Result<(), Error> {
             .and_then(|x| x.to_str())
             .unwrap_or_default()
     );
-    assert_eq!(parser.raw_prog(), Some(this.as_os_str()));
+    assert_eq!(parser.raw_prog(), this.as_os_str());
     assert_eq!(num, 42);
 
     Ok(())

@@ -386,7 +386,7 @@ enum State {
 pub struct Parser<'it> {
     args: Box<dyn Iterator<Item = OsString> + 'it>,
     current_arg: Option<OsString>,
-    prog: Option<OsString>,
+    prog: OsString,
     last_param: Option<Param>,
     state: State,
     flags: u8,
@@ -417,7 +417,7 @@ impl<'it> Parser<'it> {
     {
         let mut args = args.map(Into::into);
         Parser {
-            prog: args.next(),
+            prog: args.next().unwrap_or_default(),
             current_arg: args.next(),
             args: Box::new(args),
             state: State::Default,
@@ -443,18 +443,17 @@ impl<'it> Parser<'it> {
     /// was passed as a full path.  If you want the full, unprocessed first
     /// argument, use [`raw_prog`](Self::raw_prog) instead.
     pub fn prog(&self) -> &str {
-        self.raw_prog()
-            .map(Path::new)
-            .and_then(|x| x.file_name())
+        Path::new(self.raw_prog())
+            .file_name()
             .and_then(|x| x.to_str())
             .unwrap_or_default()
     }
 
     /// Returns the unprocessed program name (first argument).
     ///
-    /// This will be the full pathname if it exists.
-    pub fn raw_prog(&self) -> Option<&OsStr> {
-        self.prog.as_deref()
+    /// This will be the full pathname.
+    pub fn raw_prog(&self) -> &OsStr {
+        &self.prog
     }
 
     /// Parse the current argument as parameter.
