@@ -398,6 +398,7 @@ impl fmt::Debug for Parser<'_> {
         f.debug_struct("Parser")
             .field("prog", &self.prog)
             .field("finished", &self.finished())
+            .field("last_param", &self.last_param())
             .finish()
     }
 }
@@ -667,6 +668,11 @@ impl<'it> Parser<'it> {
             }
         }
         err
+    }
+
+    /// Returns a reference to the last parsed parameter.
+    pub fn last_param(&self) -> Option<&Param> {
+        self.last_param.as_ref()
     }
 
     /// Low-level next param parsing.
