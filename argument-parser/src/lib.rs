@@ -46,9 +46,10 @@
 //! * [`Parser::value`] pulls a single value from the parser and parses it with [`FromString`].
 //! * [`Parser::unexpected`] crates an "unexpected argument" error for the parameter.
 //!
-//! Because parameters hold owned strings, using `match` directly currently
-//! doesn't work.  The style however can be approximated with if clauses.  The
-//! example from above can be written shorter like this:
+//! Even though [`Param`] is an enum with different variants, because parameters
+//! hold owned strings, using `match` directly currently doesn't work.  The
+//! style however can be approximated with if clauses.  The example from above
+//! can be written shorter like this:
 //!
 //! ```
 //! use argument_parser::{Error, Parser};
