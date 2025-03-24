@@ -437,25 +437,6 @@ impl<'it> Parser<'it> {
         Parser::from_cmdline(once(OsString::new()).chain(args.map(Into::into)))
     }
 
-    /// Returns the normalized program name (first argument).
-    ///
-    /// This will only return the file name portion of the first argument if it
-    /// was passed as a full path.  If you want the full, unprocessed first
-    /// argument, use [`raw_prog`](Self::raw_prog) instead.
-    pub fn prog(&self) -> &str {
-        Path::new(self.raw_prog())
-            .file_name()
-            .and_then(|x| x.to_str())
-            .unwrap_or_default()
-    }
-
-    /// Returns the unprocessed program name (first argument).
-    ///
-    /// This will be the full pathname.
-    pub fn raw_prog(&self) -> &OsStr {
-        &self.prog
-    }
-
     /// Parse the current argument as parameter.
     ///
     /// A parameter can be a short named option (`-o`), a long named option
@@ -594,6 +575,25 @@ impl<'it> Parser<'it> {
         }
     }
 
+    /// Returns the normalized program name (first argument).
+    ///
+    /// This will only return the file name portion of the first argument if it
+    /// was passed as a full path.  If you want the full, unprocessed first
+    /// argument, use [`raw_prog`](Self::raw_prog) instead.
+    pub fn prog(&self) -> &str {
+        Path::new(self.raw_prog())
+            .file_name()
+            .and_then(|x| x.to_str())
+            .unwrap_or_default()
+    }
+
+    /// Returns the unprocessed program name (first argument).
+    ///
+    /// This will be the full pathname.
+    pub fn raw_prog(&self) -> &OsStr {
+        &self.prog
+    }
+
     /// This checks if the parser currently looks at what appears to be a non-option argument.
     ///
     /// This will return false if the parser reached the end of the command line
@@ -622,26 +622,6 @@ impl<'it> Parser<'it> {
         self.current_arg.is_none()
     }
 
-    /// Creates an unexpected parameter error.
-    ///
-    /// This crates a default [`ErrorKind::UnexpectedParam`] error with the
-    /// information of the last parsed parameter filled in.
-    pub fn unexpected(&mut self) -> Error {
-        let param = self
-            .last_param
-            .take()
-            .or_else(|| self.param().ok().flatten())
-            .unwrap_or(Param::Pos);
-        let add_value = param.is_pos();
-        let err = Error::new(ErrorKind::UnexpectedParam).with_param(param);
-        if add_value {
-            if let Ok(raw_arg) = self.raw_value() {
-                return err.with_os_string(raw_arg);
-            }
-        }
-        err
-    }
-
     /// Check if a parsing [`Flag`] is currently set.
     #[inline]
     pub fn get_flag(&self, flag: Flag) -> bool {
@@ -656,6 +636,28 @@ impl<'it> Parser<'it> {
         } else {
             self.flags &= !flag.as_u8();
         }
+    }
+
+    /// Creates an unexpected parameter error.
+    ///
+    /// This crates a default [`ErrorKind::UnexpectedParam`] error with the
+    /// information of the last parsed parameter filled in.  Calling this
+    /// can cause parsing a parameter if called multiple times or if no
+    /// parameter was parsed yet.
+    pub fn unexpected(&mut self) -> Error {
+        let param = self
+            .last_param
+            .take()
+            .or_else(|| self.param().ok().flatten())
+            .unwrap_or(Param::Pos);
+        let add_value = param.is_pos();
+        let err = Error::new(ErrorKind::UnexpectedParam).with_param(param);
+        if add_value {
+            if let Ok(raw_arg) = self.raw_value() {
+                return err.with_os_string(raw_arg);
+            }
+        }
+        err
     }
 
     /// Low-level next param parsing.
