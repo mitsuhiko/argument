@@ -1,3 +1,14 @@
 [workspace]
 resolver = "2"
 members = ["argument", "argument-*"]
+
+[workspace.package]
+edition = "2021"
+version = "0.0.1"
+homepage = "https://github.com/mitsuhiko/argument"
+repository = "https://github.com/mitsuhiko/argument"
+authors = ["Armin Ronacher <armin.ronacher@active-4.com>"]
+license = "Apache-2.0"
+
+[workspace.dependencies]
+argument-parser = { path = "argument-parser" }

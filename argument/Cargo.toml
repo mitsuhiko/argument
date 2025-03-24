@@ -1,9 +1,12 @@
 [package]
 name = "argument"
-version = "0.0.1"
-edition = "2021"
-authors = ["Armin Ronacher <armin.ronacher@active-4.com>"]
 description = "a not yet published argument parsing library. Mail me if you have questions."
-license = "Apache-2.0"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
+argument-parser = { workspace = true }

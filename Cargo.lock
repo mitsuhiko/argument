@@ -5,6 +5,9 @@ version = 4
 [[package]]
 name = "argument"
 version = "0.0.1"
+dependencies = [
+ "argument-parser",
+]
 
 [[package]]
 name = "argument-parser"
