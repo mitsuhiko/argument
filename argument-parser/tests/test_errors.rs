@@ -17,7 +17,7 @@ fn make_invalid_unicode_os_string() -> OsString {
 
 #[test]
 fn test_missing_value_error() -> Result<(), Error> {
-    let mut parser = Parser::from_args(["-n"].into_iter());
+    let mut parser = Parser::from_args(["-n"]);
     assert_eq!(parser.param()?, Some(Param::Short('n')));
     let err = parser.value::<i64>().unwrap_err();
     assert_eq!(err.kind(), ErrorKind::MissingValue);
@@ -28,7 +28,7 @@ fn test_missing_value_error() -> Result<(), Error> {
 
 #[test]
 fn test_invalid_value_error() -> Result<(), Error> {
-    let mut parser = Parser::from_args(["-ninvalid"].into_iter());
+    let mut parser = Parser::from_args(["-ninvalid"]);
     assert_eq!(parser.param()?, Some(Param::Short('n')));
     let err = parser.value::<i64>().unwrap_err();
     assert_eq!(err.kind(), ErrorKind::InvalidValue);
@@ -47,7 +47,7 @@ fn test_invalid_unicode_error() -> Result<(), Error> {
     let mut invalid_unicode = OsString::from("-n");
     invalid_unicode.push(make_invalid_unicode_os_string());
 
-    let mut parser = Parser::from_args([&invalid_unicode].into_iter());
+    let mut parser = Parser::from_args([&invalid_unicode]);
     assert_eq!(parser.param()?, Some(Param::Short('n')));
     let err = parser.value::<i64>().unwrap_err();
     assert_eq!(err.kind(), ErrorKind::InvalidUnicode);
@@ -68,18 +68,18 @@ fn test_invalid_unicode_error() -> Result<(), Error> {
 
 #[test]
 fn test_missing_positional_error() -> Result<(), Error> {
-    let mut parser = Parser::from_args(Vec::<OsString>::new().into_iter());
+    let mut parser = Parser::from_args(Vec::<OsString>::new());
     let err = parser.value::<String>().unwrap_err();
     assert_eq!(err.kind(), ErrorKind::MissingValue);
     assert_eq!(err.to_string(), "missing argument");
 
-    let mut parser = Parser::from_args(["-n"].into_iter());
+    let mut parser = Parser::from_args(["-n"]);
     assert_eq!(parser.param()?, Some(Param::Short('n')));
     let err = parser.value::<String>().unwrap_err();
     assert_eq!(err.kind(), ErrorKind::MissingValue);
     assert_eq!(err.to_string(), "missing argument for '-n'");
 
-    let mut parser = Parser::from_args(["--name"].into_iter());
+    let mut parser = Parser::from_args(["--name"]);
     assert_eq!(parser.param()?, Some(Param::Long("name".into())));
     let err = parser.value::<String>().unwrap_err();
     assert_eq!(err.kind(), ErrorKind::MissingValue);
@@ -106,19 +106,19 @@ fn test_custom_error() -> Result<(), Error> {
 
 #[test]
 fn test_unexpected_param_error() -> Result<(), Error> {
-    let mut p = Parser::from_args(vec!["-x"].into_iter());
+    let mut p = Parser::from_args(vec!["-x"]);
     p.param().unwrap();
     let err = p.unexpected();
     assert_eq!(err.kind(), ErrorKind::UnexpectedParam);
     assert_eq!(err.to_string(), "unexpected argument '-x'");
 
-    let mut p = Parser::from_args(vec!["--test"].into_iter());
+    let mut p = Parser::from_args(vec!["--test"]);
     p.param().unwrap();
     let err = p.unexpected();
     assert_eq!(err.kind(), ErrorKind::UnexpectedParam);
     assert_eq!(err.to_string(), "unexpected argument '--test'");
 
-    let mut p = Parser::from_args(vec!["pos"].into_iter());
+    let mut p = Parser::from_args(vec!["pos"]);
     p.param().unwrap();
     let err = p.unexpected();
     assert_eq!(err.kind(), ErrorKind::UnexpectedParam);
@@ -126,14 +126,14 @@ fn test_unexpected_param_error() -> Result<(), Error> {
     assert_eq!(err.value(), Some("pos"));
 
     // when param() is not called, we get the current parameter value
-    let mut p = Parser::from_args(vec!["pos"].into_iter());
+    let mut p = Parser::from_args(vec!["pos"]);
     let err = p.unexpected();
     assert_eq!(err.kind(), ErrorKind::UnexpectedParam);
     assert_eq!(err.to_string(), "unexpected argument");
     assert_eq!(err.value(), Some("pos"));
 
     // the way this works is that it might even parse a parameter if it has to
-    let mut p = Parser::from_args(vec!["--foo=bar"].into_iter());
+    let mut p = Parser::from_args(vec!["--foo=bar"]);
     let err = p.unexpected();
     assert_eq!(err.kind(), ErrorKind::UnexpectedParam);
     assert_eq!(err.to_string(), "unexpected argument '--foo'");
@@ -143,7 +143,7 @@ fn test_unexpected_param_error() -> Result<(), Error> {
 
 #[test]
 fn test_value_overflow() -> Result<(), Error> {
-    let mut parser = Parser::from_args(["999999999999999999999999"].into_iter());
+    let mut parser = Parser::from_args(["999999999999999999999999"]);
     assert_eq!(parser.param()?, Some(Param::Pos));
     let err = parser.value::<i32>().unwrap_err();
     assert_eq!(err.kind(), ErrorKind::InvalidValue);

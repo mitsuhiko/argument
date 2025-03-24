@@ -402,6 +402,12 @@ impl fmt::Debug for Parser<'_> {
     }
 }
 
+impl Default for Parser<'static> {
+    fn default() -> Self {
+        Parser::from_args(None::<String>)
+    }
+}
+
 impl<'it> Parser<'it> {
     /// Creates a parser by using the argments from the current process environment.
     pub fn from_env() -> Parser<'static> {
@@ -432,10 +438,10 @@ impl<'it> Parser<'it> {
     /// In this case the program name is empty.
     pub fn from_args<I, S>(args: I) -> Parser<'it>
     where
-        I: Iterator<Item = S> + 'it,
+        I: IntoIterator<Item = S> + 'it,
         S: Into<OsString> + 'it,
     {
-        Parser::from_cmdline(once(OsString::new()).chain(args.map(Into::into)))
+        Parser::from_cmdline(once(OsString::new()).chain(args.into_iter().map(Into::into)))
     }
 
     /// Parse the current argument as parameter.
