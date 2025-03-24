@@ -36,13 +36,13 @@
 //! * [`Parser::param`] pulls parameters from the command line one after another.  If
 //!   the end of the command line is reached, `Ok(None)` is returned.  Reading
 //!   parameters only reads the name (or presence) of the parameter, not the
-//!   value.  To get the value, use [`Parser::value`] (parses via [`FromStr`]), or
+//!   value.  To get the value, use [`Parser::value`] (parses via [`FromString`]), or
 //!   [`Parser::raw_value`] (just reads the raw [`OsString`]).
 //! * [`Param`] can be deconstructed (it's an enum) and it provides utilities:
 //!   * [`Param::is_short`] checks if a parameter is a specific short option.
 //!   * [`Param::is_long`] checks if a parameter is a specific long option.
 //!   * [`Param::is_pos`] checks if a parameter is a positional argument.
-//! * [`Parser::value`] pulls a single value from the parser and parses it with [`FromStr`].
+//! * [`Parser::value`] pulls a single value from the parser and parses it with [`FromString`].
 //! * [`Param::into_unexpected_error`] propagates an "unexpected argument" error.
 //!
 //! # Behavior
@@ -103,6 +103,8 @@ use std::iter::once;
 use std::mem::{replace, transmute_copy, ManuallyDrop};
 use std::path::Path;
 use std::str::{from_utf8, from_utf8_unchecked, FromStr};
+
+type BoxedStdError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 /// Represents a parsing error.
 ///
@@ -168,7 +170,7 @@ impl Error {
         self
     }
 
-    fn with_source(mut self, source: Box<dyn std::error::Error + Send + Sync + 'static>) -> Error {
+    fn with_source(mut self, source: BoxedStdError) -> Error {
         self.0.source = Some(source);
         self
     }
@@ -242,7 +244,7 @@ struct ErrorRepr {
     kind: ErrorKind,
     param: Option<Param>,
     value: Option<Result<String, OsString>>,
-    source: Option<Box<dyn std::error::Error + Send + Sync + 'static>>,
+    source: Option<BoxedStdError>,
 }
 
 /// Represents the type of parsing error.
@@ -462,7 +464,7 @@ impl<'it> Parser<'it> {
     /// Parse the current argument as a value.
     ///
     /// This gets a value for both options and positional arguments and tries to
-    /// parse it with [`FromStr`].
+    /// parse it with [`FromString`].
     ///
     /// When should you use which method?
     ///
@@ -484,9 +486,9 @@ impl<'it> Parser<'it> {
     /// [`looks_at_value`](Self::looks_at_value).  This is a basic heuristic
     /// that will return `false` if what it's looking at currently looks like an
     /// option or the end of the command line was reached.
-    pub fn value<V: Parsable>(&mut self) -> Result<V, Error> {
+    pub fn value<V: FromString>(&mut self) -> Result<V, Error> {
         os_string_into_string(self.raw_value()?)
-            .and_then(parse_string)
+            .and_then(FromString::from_string)
             .map_err(|err| self.augment_error(err))
     }
 
@@ -513,10 +515,10 @@ impl<'it> Parser<'it> {
     ///
     /// Creating command line interfaces with these types of options is generally
     /// not a good idea and their use is strongly discouraged.
-    pub fn optional_value<V: Parsable>(&mut self) -> Result<Option<V>, Error> {
+    pub fn optional_value<V: FromString>(&mut self) -> Result<Option<V>, Error> {
         match self.optional_raw_value() {
             Some(value) => os_string_into_string(value)
-                .and_then(parse_string)
+                .and_then(FromString::from_string)
                 .map(Some)
                 .map_err(|err| self.augment_error(err)),
             None => Ok(None),
@@ -575,7 +577,7 @@ impl<'it> Parser<'it> {
         }
     }
 
-    /// This checks if the parser currently looks at what appears to be a normal argument.
+    /// This checks if the parser currently looks at what appears to be a non-option argument.
     ///
     /// This will return false if the parser reached the end of the command line
     /// or if the parser is looking at something that appears to be an option.  The parser
@@ -720,33 +722,34 @@ impl<'it> Parser<'it> {
     }
 }
 
-fn parse_string<V: Parsable>(value: String) -> Result<V, Error> {
-    // SAFETY: we can make a fast path here if we know the value is a string
-    // and we want to convert into a string.  Ideally we could directly
-    // use transmute but that is not possible today due to compiler limitations.
-    if std::any::TypeId::of::<V>() == std::any::TypeId::of::<String>() {
-        Ok(unsafe { transmute_copy(&ManuallyDrop::new(value)) })
-    } else {
-        V::from_str(&value).map_err(|err| {
-            Error::new(ErrorKind::InvalidValue)
-                .with_string(value)
-                .with_source(err.into())
-        })
-    }
-}
-
-/// Alias for a value that can be parsed by this crate.
+/// Utility trait to convert from [`String`] to a specific type.
 ///
-/// It is implemented for most types that implement [`FromStr`] that have a
-/// an error that is compatible with [`std::error::Error`].
-pub trait Parsable:
-    FromStr<Err: Into<Box<dyn std::error::Error + Send + Sync + 'static>>> + 'static
-{
+/// It has a blanket implementation for all types that implement [`FromStr`]
+/// that have a an error that is compatible with [`std::error::Error`].  This
+/// also implements a no-op conversion from [`String`] to [`String`].
+pub trait FromString: Sized {
+    /// Parse a value from an owned string.
+    fn from_string(s: String) -> Result<Self, Error>;
 }
 
-impl<T: FromStr<Err: Into<Box<dyn std::error::Error + Send + Sync + 'static>>> + 'static> Parsable
-    for T
+impl<T> FromString for T
+where
+    T: FromStr<Err: Into<BoxedStdError>> + 'static,
 {
+    fn from_string(s: String) -> Result<T, Error> {
+        // SAFETY: we can make a fast path here if we know the value is a string
+        // and we want to convert into a string.  Ideally we could directly
+        // use transmute but that is not possible today due to compiler limitations.
+        if std::any::TypeId::of::<T>() == std::any::TypeId::of::<String>() {
+            Ok(unsafe { transmute_copy(&ManuallyDrop::new(s)) })
+        } else {
+            T::from_str(&s).map_err(|err| {
+                Error::new(ErrorKind::InvalidValue)
+                    .with_string(s)
+                    .with_source(err.into())
+            })
+        }
+    }
 }
 
 /// Gets a single unicode character at an offset in the OsStr.
