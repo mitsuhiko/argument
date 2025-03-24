@@ -106,20 +106,37 @@ fn test_custom_error() -> Result<(), Error> {
 
 #[test]
 fn test_unexpected_param_error() -> Result<(), Error> {
-    let mut p = Parser::from_args(vec!["pos"].into_iter());
-
-    let err = p.unexpected(Param::Short('x'));
+    let mut p = Parser::from_args(vec!["-x"].into_iter());
+    p.param().unwrap();
+    let err = p.unexpected();
     assert_eq!(err.kind(), ErrorKind::UnexpectedParam);
     assert_eq!(err.to_string(), "unexpected argument '-x'");
 
-    let err = p.unexpected(Param::Long("test".into()));
+    let mut p = Parser::from_args(vec!["--test"].into_iter());
+    p.param().unwrap();
+    let err = p.unexpected();
     assert_eq!(err.kind(), ErrorKind::UnexpectedParam);
     assert_eq!(err.to_string(), "unexpected argument '--test'");
 
-    let err = p.unexpected(Param::Pos);
+    let mut p = Parser::from_args(vec!["pos"].into_iter());
+    p.param().unwrap();
+    let err = p.unexpected();
     assert_eq!(err.kind(), ErrorKind::UnexpectedParam);
     assert_eq!(err.to_string(), "unexpected argument");
     assert_eq!(err.value(), Some("pos"));
+
+    // when param() is not called, we get the current parameter value
+    let mut p = Parser::from_args(vec!["pos"].into_iter());
+    let err = p.unexpected();
+    assert_eq!(err.kind(), ErrorKind::UnexpectedParam);
+    assert_eq!(err.to_string(), "unexpected argument");
+    assert_eq!(err.value(), Some("pos"));
+
+    // the way this works is that it might even parse a parameter if it has to
+    let mut p = Parser::from_args(vec!["--foo=bar"].into_iter());
+    let err = p.unexpected();
+    assert_eq!(err.kind(), ErrorKind::UnexpectedParam);
+    assert_eq!(err.to_string(), "unexpected argument '--foo'");
 
     Ok(())
 }

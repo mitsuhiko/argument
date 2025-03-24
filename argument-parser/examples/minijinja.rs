@@ -155,7 +155,7 @@ fn execute() -> Result<(), Error> {
             p if p.is_pos() && data_file.is_none() => {
                 data_file = Some(PathBuf::from(parser.raw_value()?));
             }
-            p => return Err(parser.unexpected(p)),
+            _ => return Err(parser.unexpected()),
         }
     }
 

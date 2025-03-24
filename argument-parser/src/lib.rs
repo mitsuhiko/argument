@@ -17,11 +17,11 @@
 //!
 //!     while let Some(param) = parser.param()? {
 //!         if param.is_short('n') || param.is_long("number") {
-//!             println!("Got number {}", parser.value::<i32>()?);
+//!             println!("n = {}", parser.value::<i32>()?);
 //!         } else if param.is_pos() {
-//!             println!("Got arg {}", parser.value::<String>()?);
+//!             println!("arg {}", parser.value::<String>()?);
 //!         } else {
-//!             return Err(parser.unexpected(param));
+//!             return Err(parser.unexpected());
 //!         }
 //!     }
 //!
@@ -41,9 +41,32 @@
 //! * [`Param`] can be deconstructed (it's an enum) and it provides utilities:
 //!   * [`Param::is_short`] checks if a parameter is a specific short option.
 //!   * [`Param::is_long`] checks if a parameter is a specific long option.
+//!   * [`Param::is_either`] checks if a parameter is a specific short or long option.
 //!   * [`Param::is_pos`] checks if a parameter is a positional argument.
 //! * [`Parser::value`] pulls a single value from the parser and parses it with [`FromString`].
 //! * [`Parser::unexpected`] crates an "unexpected argument" error for the parameter.
+//!
+//! Because parameters hold owned strings, using `match` directly currently
+//! doesn't work.  The style however can be approximated with if clauses.  The
+//! example from above can be written shorter like this:
+//!
+//! ```
+//! use argument_parser::{Error, Parser};
+//!
+//! fn main() -> Result<(), Error> {
+//!     let mut parser = Parser::from_env();
+//!
+//!     while let Some(param) = parser.param()? {
+//!         match param {
+//!             p if p.is_either('n', "number") => println!("n = {}", parser.value::<i32>()?),
+//!             p if p.is_pos() => println!("arg {}", parser.value::<String>()?),
+//!             _ => return Err(parser.unexpected()),
+//!         }
+//!     }
+//!
+//!     Ok(())
+//! }
+//! ```
 //!
 //! # Behavior
 //!
@@ -467,7 +490,7 @@ impl<'it> Parser<'it> {
     /// * [`raw_value`](Self::raw_value) for when you need to accept a filesystem path,
     ///   environment variable value or similar.
     ///
-    /// Additionally for some CLIs where you might want to represent optional
+    /// Additionally for some interfaces where you might want to represent optional
     /// values for parameters, you can also use [`optional_value`](Self::optional_value),
     /// but the usage of that method is discouraged.
     ///
@@ -603,9 +626,13 @@ impl<'it> Parser<'it> {
     /// Creates an unexpected parameter error.
     ///
     /// This crates a default [`ErrorKind::UnexpectedParam`] error with the
-    /// information of the parameter filled in.  For positional parameters the
-    /// current raw value is also filled in.
-    pub fn unexpected(&mut self, param: Param) -> Error {
+    /// information of the last parsed parameter filled in.
+    pub fn unexpected(&mut self) -> Error {
+        let param = self
+            .last_param
+            .take()
+            .or_else(|| self.param().ok().flatten())
+            .unwrap_or(Param::Pos);
         let add_value = param.is_pos();
         let err = Error::new(ErrorKind::UnexpectedParam).with_param(param);
         if add_value {

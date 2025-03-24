@@ -14,7 +14,7 @@ fn main() -> Result<(), Error> {
         } else if param.is_pos() {
             args.push(parser.value()?);
         } else {
-            return Err(parser.unexpected(param));
+            return Err(parser.unexpected());
         }
     }
 
