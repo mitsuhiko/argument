@@ -80,9 +80,6 @@ differences:
   during parsing such as if `--` should be handled, if numeric arguments are
   valid, if options are disabled after the first positional argument and
   if equal sign in short options should be handled.
-* This crate does not exist in a vacuum, it's part of `argument` which is
-  a (slightly) higher level utility to make working with the lower level
-  `argument-parser` crate simpler.
 
 ## Unicode and Broken Unicode
 
@@ -107,3 +104,5 @@ sponsor](https://github.com/sponsors/mitsuhiko).
 ## License and Links
 
 - License: [Apache-2.0](https://github.com/mitsuhiko/argument/blob/main/LICENSE)
+- [Discussions](https://github.com/mitsuhiko/argument/discussions)
+- [Issue Tracker](https://github.com/mitsuhiko/argument/issues)
