@@ -67,7 +67,9 @@ def main():
     os.write(fd, (SETUP % {"dir": directory}).encode() + b"\n")
     os.write(fd, b"print -r -- @@SET''UP@@\n")
     read_until(fd, b"@@SETUP@@")
-    for line in lines:
+    # the first completion in a fresh shell loads the completion system
+    # and its matches are not reliably captured, so warm it up first.
+    for idx, line in enumerate([lines[0]] + lines):
         os.write(fd, line.encode() + b"\t")
         out = read_until(fd, b"@@DONE@@")
         hits = []
@@ -77,8 +79,9 @@ def main():
                 hit = raw.split("@@HIT@@:", 1)[1]
                 if hit and hit not in hits:
                     hits.append(hit)
-        for hit in hits:
-            print("%s\t%s" % (line, hit), flush=True)
+        if idx > 0:
+            for hit in hits:
+                print("%s\t%s" % (line, hit), flush=True)
         # clear the line and wait for a fresh prompt
         os.write(fd, b"\x15print -r -- @@NE''XT@@\n")
         read_until(fd, b"@@NEXT@@")

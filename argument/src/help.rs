@@ -296,14 +296,16 @@ fn write_table(
     }
 }
 
-/// Wraps text to the given width.  Newlines and leading indentation of
-/// lines are preserved.
+/// Wraps text to the given width.  Newlines, leading indentation of lines
+/// and whitespace between words are preserved (whitespace at line breaks is
+/// dropped).
 pub(crate) fn wrap(text: &str, width: usize) -> Vec<String> {
     let mut rv = Vec::new();
     if text.is_empty() {
         return rv;
     }
     for line in text.split('\n') {
+        let line = line.trim_end();
         let trimmed = line.trim_start();
         if trimmed.is_empty() {
             rv.push(String::new());
@@ -313,16 +315,23 @@ pub(crate) fn wrap(text: &str, width: usize) -> Vec<String> {
         let mut current = indent.to_string();
         let mut current_width = text_width(indent);
         let mut has_word = false;
-        for word in trimmed.split_whitespace() {
+        let mut rest = trimmed;
+        while !rest.is_empty() {
+            let space_len = rest.len() - rest.trim_start().len();
+            let space = &rest[..space_len];
+            rest = &rest[space_len..];
+            let word_len = rest.find(char::is_whitespace).unwrap_or(rest.len());
+            let word = &rest[..word_len];
+            rest = &rest[word_len..];
             let word_width = text_width(word);
-            if has_word && current_width + 1 + word_width > width {
+            if has_word && current_width + text_width(space) + word_width > width {
                 rv.push(std::mem::replace(&mut current, indent.to_string()));
                 current_width = text_width(indent);
                 has_word = false;
             }
             if has_word {
-                current.push(' ');
-                current_width += 1;
+                current.push_str(space);
+                current_width += text_width(space);
             }
             current.push_str(word);
             current_width += word_width;
@@ -546,6 +555,8 @@ Template Behavior:
         assert_eq!(wrap("a b c d", 3), vec!["a b", "c d"]);
         assert_eq!(wrap("  a b c", 5), vec!["  a b", "  c"]);
         assert_eq!(wrap("a\n\nb", 5), vec!["a", "", "b"]);
+        assert_eq!(wrap("a.  b   c", 20), vec!["a.  b   c"]);
+        assert_eq!(wrap("a.  b   c", 5), vec!["a.  b", "c"]);
     }
 
     #[test]
