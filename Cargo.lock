@@ -4,25 +4,25 @@ version = 4
 
 [[package]]
 name = "argument"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "argument-parser",
 ]
 
 [[package]]
 name = "argument-completions"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "argument",
 ]
 
 [[package]]
 name = "argument-mangen"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "argument",
 ]
 
 [[package]]
 name = "argument-parser"
-version = "0.0.1"
+version = "0.1.0"
