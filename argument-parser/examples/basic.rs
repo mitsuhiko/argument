@@ -35,7 +35,7 @@ fn execute() -> Result<(), Error> {
     if numbers.is_empty() && !shout {
         println!("{}", USAGE)
     } else {
-        println!("Numbers: {:?}", &numbers);
+        println!("Numbers: {:?}", numbers);
         println!("Sum: {}", numbers.into_iter().sum::<i64>());
         if shout {
             println!("I AM SHOUTING!");
