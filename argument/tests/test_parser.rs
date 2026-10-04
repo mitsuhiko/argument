@@ -261,3 +261,70 @@ fn test_value_for_flag_panics() {
     p.param().unwrap();
     let _ = p.value::<String>();
 }
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum V {
+    Format,
+    Mode,
+    LongHelp,
+}
+
+static VALUES: Cli<V> = Cli::new("values")
+    .about("Short about")
+    .long_about("Long about")
+    .args(&[Pos::new(V::Mode, "MODE")
+        .optional()
+        .possible_values(&["fast", "slow"])])
+    .opts(&[
+        Opt::new(V::Format)
+            .short('f')
+            .long("format")
+            .value("FORMAT")
+            .possible_values_with_help(&[("json", "JSON"), ("yaml", "YAML")]),
+        Opt::new(V::LongHelp).long("long-help"),
+    ]);
+
+fn parse_values(args: &[&str]) -> Result<Vec<String>, Error> {
+    let mut p = VALUES.parser_from_args(args.iter().copied());
+    let mut rv = Vec::new();
+    while let Some(arg) = p.param()? {
+        match arg {
+            V::Format => rv.push(p.value()?),
+            V::Mode => rv.push(p.raw_value()?.to_string_lossy().into_owned()),
+            V::LongHelp => return Err(p.long_help()),
+        }
+    }
+    Ok(rv)
+}
+
+#[test]
+fn test_possible_values() {
+    assert_eq!(
+        parse_values(&["-fjson", "slow"]).unwrap(),
+        vec!["json", "slow"]
+    );
+
+    let err = parse_values(&["--format=jsno"]).unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::InvalidValue);
+    assert_eq!(
+        err.message(),
+        "invalid value 'jsno' for '--format <FORMAT>'"
+    );
+    assert_eq!(err.tip(), Some("a similar value exists: 'json'"));
+
+    let err = parse_values(&["medium"]).unwrap_err();
+    assert_eq!(err.message(), "invalid value 'medium' for '[MODE]'");
+    assert_eq!(err.tip(), Some("possible values: fast, slow"));
+}
+
+#[test]
+fn test_long_help() {
+    let err = parse_values(&["--long-help"]).unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::Help);
+    assert!(err.message().starts_with("Long about\n"));
+    assert!(err.message().contains("- json: JSON"));
+
+    let err = parse_values(&["--help"]).unwrap_err();
+    assert!(err.message().starts_with("Short about\n"));
+    assert!(err.message().contains("[possible values: json, yaml]"));
+}

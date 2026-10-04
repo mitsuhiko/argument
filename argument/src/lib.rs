@@ -104,6 +104,7 @@
 //! ```
 mod error;
 mod help;
+mod info;
 mod parser;
 mod spec;
 mod term;
@@ -111,5 +112,6 @@ mod term;
 pub use argument_parser::{Flag, FromString};
 
 pub use crate::error::{Error, ErrorKind};
+pub use crate::info::{ArgumentInfo, CommandInfo, OptionInfo, PossibleValue, ValueHint};
 pub use crate::parser::Parser;
 pub use crate::spec::{Cli, Cmd, Opt, Pos};

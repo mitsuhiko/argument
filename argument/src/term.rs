@@ -3,11 +3,11 @@
 //! This declares the few system functions needed directly instead of
 //! depending on `libc` or `windows-sys`.
 
-/// Returns the width of the terminal in columns.
+/// Returns the width of the terminal attached to stdout in columns.
 ///
-/// This checks stdout, stderr and stdin (in that order) so that the width is
-/// also detected if one of the streams is redirected.  Returns `None` if none
-/// of them is attached to a terminal or the platform is not supported.
+/// Returns `None` if stdout is not a terminal (eg: when piped) or the
+/// platform is not supported.  Only stdout is checked as this is where help
+/// is printed to and it keeps redirected output deterministic.
 pub(crate) fn terminal_width() -> Option<usize> {
     imp::terminal_width().filter(|&x| x > 0)
 }
@@ -100,13 +100,11 @@ mod imp {
 
     pub(super) fn terminal_width() -> Option<usize> {
         let request = TIOCGWINSZ?;
-        [1, 2, 0].into_iter().find_map(|fd| {
-            let mut size = Winsize::default();
-            // SAFETY: TIOCGWINSZ writes a `struct winsize` into the pointer
-            // which matches the layout of `Winsize`.
-            let rv = unsafe { ioctl(fd, request, &mut size as *mut Winsize) };
-            (rv == 0 && size.ws_col > 0).then_some(size.ws_col as usize)
-        })
+        let mut size = Winsize::default();
+        // SAFETY: TIOCGWINSZ writes a `struct winsize` into the pointer
+        // which matches the layout of `Winsize`.
+        let rv = unsafe { ioctl(1, request, &mut size as *mut Winsize) };
+        (rv == 0 && size.ws_col > 0).then_some(size.ws_col as usize)
     }
 }
 
@@ -116,9 +114,7 @@ mod imp {
 
     type Handle = *mut c_void;
 
-    const STD_INPUT_HANDLE: u32 = -10i32 as u32;
     const STD_OUTPUT_HANDLE: u32 = -11i32 as u32;
-    const STD_ERROR_HANDLE: u32 = -12i32 as u32;
 
     #[repr(C)]
     #[derive(Default)]
@@ -156,23 +152,19 @@ mod imp {
     }
 
     pub(super) fn terminal_width() -> Option<usize> {
-        [STD_OUTPUT_HANDLE, STD_ERROR_HANDLE, STD_INPUT_HANDLE]
-            .into_iter()
-            .find_map(|std_handle| {
-                // SAFETY: GetStdHandle has no preconditions.
-                let handle = unsafe { GetStdHandle(std_handle) };
-                if handle.is_null() || handle as isize == -1 {
-                    return None;
-                }
-                let mut info = ConsoleScreenBufferInfo::default();
-                // SAFETY: the handle was checked and `info` matches the
-                // layout of CONSOLE_SCREEN_BUFFER_INFO.
-                if unsafe { GetConsoleScreenBufferInfo(handle, &mut info) } == 0 {
-                    return None;
-                }
-                let width = info.window.right as i32 - info.window.left as i32 + 1;
-                usize::try_from(width).ok()
-            })
+        // SAFETY: GetStdHandle has no preconditions.
+        let handle = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
+        if handle.is_null() || handle as isize == -1 {
+            return None;
+        }
+        let mut info = ConsoleScreenBufferInfo::default();
+        // SAFETY: the handle was checked and `info` matches the
+        // layout of CONSOLE_SCREEN_BUFFER_INFO.
+        if unsafe { GetConsoleScreenBufferInfo(handle, &mut info) } == 0 {
+            return None;
+        }
+        let width = info.window.right as i32 - info.window.left as i32 + 1;
+        usize::try_from(width).ok()
     }
 }
 

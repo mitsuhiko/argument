@@ -2,189 +2,225 @@
 use std::fmt::Write;
 
 use crate::error::Context;
-use crate::spec::{Builtin, Cli, Opt};
-
-/// Left columns wider than this switch the table to the two-line layout.
-const MAX_LEFT_COLUMN: usize = 30;
+use crate::info::{CommandInfo, OptionInfo, PossibleValue};
 
 /// Indentation of help texts in the two-line layout.
 const NEXT_LINE_INDENT: usize = 10;
 
+/// The default and maximum width if not configured otherwise.
+const DEFAULT_WIDTH: usize = 100;
+
 /// The width used for rendering help pages.
 ///
 /// An explicit `COLUMNS` environment variable wins over the detected terminal
-/// width.  The result is clamped to keep help pages readable.
-pub(crate) fn terminal_width() -> usize {
-    std::env::var("COLUMNS")
+/// width.  The result is capped by the configured maximum width.
+pub(crate) fn render_width(cmd: &dyn CommandInfo) -> usize {
+    let detected = std::env::var("COLUMNS")
         .ok()
         .and_then(|x| x.parse::<usize>().ok())
         .filter(|&x| x > 0)
         .or_else(crate::term::terminal_width)
-        .unwrap_or(80)
-        .clamp(40, 100)
+        .unwrap_or(DEFAULT_WIDTH);
+    detected
+        .min(cmd.max_width().unwrap_or(DEFAULT_WIDTH))
+        .max(40)
 }
 
-pub(crate) fn context<A>(cli: &Cli<A>, prog: &str) -> Context {
+pub(crate) fn context(cmd: &dyn CommandInfo, prog: &str) -> Context {
     Context {
         prog: prog.to_string(),
-        usage: usage(cli, prog),
-        help_flag: help_flag(cli),
+        usage: usage(cmd, prog),
+        help_flag: help_flag(cmd),
     }
 }
 
-fn help_flag<A>(cli: &Cli<A>) -> Option<&'static str> {
-    if cli.builtin_long("help").is_some() {
+/// Finds the flag that shows the help (`--help` or `-h`).
+fn help_flag(cmd: &dyn CommandInfo) -> Option<&'static str> {
+    let opts = cmd.options();
+    if opts.iter().any(|x| x.long() == Some("help")) {
         Some("--help")
-    } else if cli.builtin_short('h').is_some() {
+    } else if opts.iter().any(|x| x.short() == Some('h')) {
         Some("-h")
     } else {
         None
     }
 }
 
-pub(crate) fn usage<A>(cli: &Cli<A>, prog: &str) -> String {
-    if let Some(usage) = cli.usage {
+pub(crate) fn usage(cmd: &dyn CommandInfo, prog: &str) -> String {
+    if let Some(usage) = cmd.usage_override() {
         return format!("{} {}", prog, usage);
     }
     let mut rv = prog.to_string();
-    if cli.opts.iter().any(|x| x.id.is_some() && !x.hidden) || help_flag(cli).is_some() {
+    if cmd.options().iter().any(|x| !x.is_hidden()) {
         rv.push_str(" [OPTIONS]");
     }
-    for arg in cli.args {
+    for arg in cmd.arguments() {
         rv.push(' ');
         rv.push_str(&arg.display());
     }
-    if !cli.cmds.is_empty() {
+    if !cmd.commands().is_empty() {
         rv.push_str(" [COMMAND]");
     }
     rv
 }
 
-/// A row in the options table.
-struct OptRow<'a> {
-    short: Option<char>,
-    long: Option<&'a str>,
-    value: Option<&'a str>,
-    optional_value: bool,
-    help: &'a str,
-}
-
-impl<'a> OptRow<'a> {
-    fn from_opt<A>(opt: &'a Opt<A>) -> OptRow<'a> {
-        OptRow {
-            short: opt.short,
-            long: opt.long,
-            value: opt.value,
-            optional_value: opt.optional_value,
-            help: opt.help,
+/// Renders the left column of an option.
+pub(crate) fn option_display(opt: &OptionInfo, pad_long: bool) -> String {
+    let mut rv = String::new();
+    match (opt.short(), opt.long()) {
+        (Some(s), Some(l)) => write!(rv, "-{}, --{}", s, l).unwrap(),
+        (Some(s), None) => write!(rv, "-{}", s).unwrap(),
+        (None, Some(l)) if pad_long => write!(rv, "    --{}", l).unwrap(),
+        (None, Some(l)) => write!(rv, "--{}", l).unwrap(),
+        (None, None) => {}
+    }
+    if let Some(value) = opt.value_name() {
+        match (opt.has_optional_value(), opt.long().is_some()) {
+            (true, true) => write!(rv, "[={}]", value).unwrap(),
+            (true, false) => write!(rv, "[{}]", value).unwrap(),
+            (false, _) => write!(rv, " <{}>", value).unwrap(),
         }
     }
+    rv
+}
 
-    fn left(&self, pad_long: bool) -> String {
-        let mut rv = String::new();
-        match (self.short, self.long) {
-            (Some(s), Some(l)) => write!(rv, "-{}, --{}", s, l).unwrap(),
-            (Some(s), None) => write!(rv, "-{}", s).unwrap(),
-            (None, Some(l)) if pad_long => write!(rv, "    --{}", l).unwrap(),
-            (None, Some(l)) => write!(rv, "--{}", l).unwrap(),
-            (None, None) => {}
+/// Assembles the help text of an option or argument.
+fn item_help(
+    help: &str,
+    long_help: Option<&str>,
+    default_value: Option<&str>,
+    values: &[PossibleValue],
+    long: bool,
+) -> String {
+    if !long {
+        let mut rv = help.to_string();
+        let mut add = |piece: String| {
+            if !rv.is_empty() {
+                rv.push(' ');
+            }
+            rv.push_str(&piece);
+        };
+        if let Some(default) = default_value {
+            add(format!("[default: {}]", default));
         }
-        if let Some(value) = self.value {
-            match (self.optional_value, self.long.is_some()) {
-                (true, true) => write!(rv, "[={}]", value).unwrap(),
-                (true, false) => write!(rv, "[{}]", value).unwrap(),
-                (false, _) => write!(rv, " <{}>", value).unwrap(),
+        if !values.is_empty() {
+            let names = values.iter().map(|x| x.name()).collect::<Vec<_>>();
+            add(format!("[possible values: {}]", names.join(", ")));
+        }
+        return rv;
+    }
+
+    let mut rv = long_help.unwrap_or(help).trim_end().to_string();
+    let mut add = |piece: String| {
+        if !rv.is_empty() {
+            rv.push_str("\n\n");
+        }
+        rv.push_str(&piece);
+    };
+    if let Some(default) = default_value {
+        add(format!("[default: {}]", default));
+    }
+    if values.iter().any(|x| x.help().is_some()) {
+        let mut piece = "Possible values:".to_string();
+        for value in values {
+            match value.help() {
+                Some(help) => write!(piece, "\n- {}: {}", value.name(), help).unwrap(),
+                None => write!(piece, "\n- {}", value.name()).unwrap(),
             }
         }
-        rv
+        add(piece);
+    } else if !values.is_empty() {
+        let names = values.iter().map(|x| x.name()).collect::<Vec<_>>();
+        add(format!("[possible values: {}]", names.join(", ")));
     }
+    rv
 }
 
-pub(crate) fn help_text<A>(cli: &Cli<A>, prog: &str, width: usize) -> String {
+/// Renders the help page.  `long` selects the long help.
+pub(crate) fn help_text(cmd: &dyn CommandInfo, prog: &str, width: usize, long: bool) -> String {
     let mut out = String::new();
 
-    if let Some(about) = cli.about {
-        for line in wrap(about, width) {
+    let about = if long {
+        cmd.long_about().or(cmd.about())
+    } else {
+        cmd.about()
+    };
+    for text in [cmd.before_help(), about].into_iter().flatten() {
+        for line in wrap(text.trim_end(), width) {
             out.push_str(&line);
             out.push('\n');
         }
         out.push('\n');
     }
 
-    writeln!(out, "Usage: {}", usage(cli, prog)).unwrap();
+    writeln!(out, "Usage: {}", usage(cmd, prog)).unwrap();
 
-    if !cli.cmds.is_empty() {
-        let rows = cli
-            .cmds
+    let commands = cmd.commands();
+    if !commands.is_empty() {
+        let rows = commands
             .iter()
             .map(|cmd| {
-                let about = cmd.info.about().unwrap_or("");
+                let about = cmd.about().unwrap_or("");
                 (
-                    cmd.info.name().to_string(),
-                    about.lines().next().unwrap_or(""),
+                    cmd.name().to_string(),
+                    about.lines().next().unwrap_or("").to_string(),
                 )
             })
             .collect::<Vec<_>>();
-        write_table(&mut out, "Commands", &rows, width);
+        write_table(&mut out, "Commands", &rows, width, false);
     }
 
-    if !cli.args.is_empty() {
-        let rows = cli
-            .args
+    let args = cmd.arguments();
+    if !args.is_empty() {
+        let rows = args
             .iter()
-            .map(|arg| (arg.display(), arg.help))
+            .map(|arg| {
+                let help = item_help(
+                    arg.help(),
+                    arg.long_help(),
+                    arg.default_value(),
+                    &arg.possible_values(),
+                    long,
+                );
+                (arg.display(), help)
+            })
             .collect::<Vec<_>>();
-        write_table(&mut out, "Arguments", &rows, width);
+        write_table(&mut out, "Arguments", &rows, width, long);
     }
 
-    let mut sections: Vec<(&str, Vec<OptRow<'_>>)> = vec![("Options", Vec::new())];
-    for opt in cli.opts {
-        if opt.id.is_none() {
-            sections.push((opt.help, Vec::new()));
-        } else if !opt.hidden {
-            sections.last_mut().unwrap().1.push(OptRow::from_opt(opt));
-        }
-    }
-
-    let builtins = [
-        (Builtin::Help, 'h', "help", "Print help"),
-        (Builtin::Version, 'V', "version", "Print version"),
-    ];
-    for (builtin, short, long, help) in builtins {
-        let short = cli.builtin_short(short).filter(|x| *x == builtin);
-        let long = cli.builtin_long(long).filter(|x| *x == builtin);
-        if short.is_none() && long.is_none() {
-            continue;
-        }
-        sections[0].1.push(OptRow {
-            short: short.map(|_| long_to_short(builtin)),
-            long: long.map(|_| builtin_long_name(builtin)),
-            value: None,
-            optional_value: false,
-            help,
-        });
-    }
-
+    let opts = cmd
+        .options()
+        .into_iter()
+        .filter(|x| !x.is_hidden())
+        .collect::<Vec<_>>();
     // long options are indented to line up with short options if any
-    // option in any section has a short name.
-    let pad_long = sections
-        .iter()
-        .flat_map(|x| x.1.iter())
-        .any(|x| x.short.is_some());
-    for (title, rows) in sections {
-        if rows.is_empty() {
-            continue;
+    // option has a short name.
+    let pad_long = opts.iter().any(|x| x.short().is_some());
+    type Rows = Vec<(String, String)>;
+    let mut sections: Vec<(Option<&str>, Rows)> = Vec::new();
+    for opt in &opts {
+        let row = (
+            option_display(opt, pad_long),
+            item_help(
+                opt.help(),
+                opt.long_help(),
+                opt.default_value(),
+                &opt.possible_values(),
+                long,
+            ),
+        );
+        match sections.iter_mut().find(|x| x.0 == opt.section()) {
+            Some(section) => section.1.push(row),
+            None => sections.push((opt.section(), vec![row])),
         }
-        let rows = rows
-            .iter()
-            .map(|row| (row.left(pad_long), row.help))
-            .collect::<Vec<_>>();
-        write_table(&mut out, title, &rows, width);
+    }
+    for (title, rows) in sections {
+        write_table(&mut out, title.unwrap_or("Options"), &rows, width, long);
     }
 
-    if let Some(after_help) = cli.after_help {
+    if let Some(after_help) = cmd.after_help() {
         out.push('\n');
-        for line in wrap(after_help, width) {
+        for line in wrap(after_help.trim_end(), width) {
             out.push_str(&line);
             out.push('\n');
         }
@@ -194,32 +230,43 @@ pub(crate) fn help_text<A>(cli: &Cli<A>, prog: &str, width: usize) -> String {
     out
 }
 
-fn long_to_short(builtin: Builtin) -> char {
-    match builtin {
-        Builtin::Help => 'h',
-        Builtin::Version => 'V',
-    }
+fn text_width(s: &str) -> usize {
+    s.chars().count()
 }
 
-fn builtin_long_name(builtin: Builtin) -> &'static str {
-    match builtin {
-        Builtin::Help => "help",
-        Builtin::Version => "version",
-    }
+/// Decides if a table should put the help text on the next line.
+///
+/// This uses the same heuristic as clap: the help goes on the next line if
+/// the left column takes up more than 40% of the width and a help text does
+/// not fit next to it.
+fn use_next_line(rows: &[(String, String)], width: usize) -> bool {
+    let longest = rows.iter().map(|x| text_width(&x.0)).max().unwrap_or(0);
+    let taken = longest + 4;
+    rows.iter().any(|(_, help)| {
+        width >= taken && (taken as f32 / width as f32) > 0.40 && text_width(help) > width - taken
+    })
 }
 
-fn write_table(out: &mut String, title: &str, rows: &[(String, &str)], width: usize) {
+fn write_table(
+    out: &mut String,
+    title: &str,
+    rows: &[(String, String)],
+    width: usize,
+    next_line: bool,
+) {
+    if rows.is_empty() {
+        return;
+    }
     writeln!(out, "\n{}:", title).unwrap();
-    let left_width = rows.iter().map(|x| x.0.chars().count()).max().unwrap_or(0);
-    let col = 2 + left_width + 2;
 
-    if left_width <= MAX_LEFT_COLUMN && width >= col + 20 {
+    if !next_line && !use_next_line(rows, width) {
+        let longest = rows.iter().map(|x| text_width(&x.0)).max().unwrap_or(0);
+        let col = 2 + longest + 2;
         for (left, help) in rows {
-            let lines = wrap(help, width - col);
+            let lines = wrap(help, width.saturating_sub(col).max(20));
             let mut line = format!("  {}", left);
             if let Some(first) = lines.first() {
-                let pad = col - 2 - left.chars().count();
-                line.push_str(&" ".repeat(pad));
+                line.push_str(&" ".repeat(col - 2 - text_width(left)));
                 line.push_str(first);
             }
             out.push_str(line.trim_end());
@@ -264,13 +311,13 @@ pub(crate) fn wrap(text: &str, width: usize) -> Vec<String> {
         }
         let indent = &line[..line.len() - trimmed.len()];
         let mut current = indent.to_string();
-        let mut current_width = indent.chars().count();
+        let mut current_width = text_width(indent);
         let mut has_word = false;
         for word in trimmed.split_whitespace() {
-            let word_width = word.chars().count();
+            let word_width = text_width(word);
             if has_word && current_width + 1 + word_width > width {
                 rv.push(std::mem::replace(&mut current, indent.to_string()));
-                current_width = indent.chars().count();
+                current_width = text_width(indent);
                 has_word = false;
             }
             if has_word {
@@ -334,13 +381,15 @@ fn edit_distance(a: &str, b: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::spec::{Cmd, Pos};
+    use crate::info::ValueHint;
+    use crate::spec::{Cli, Cmd, Opt, Pos};
 
     #[derive(Copy, Clone)]
     enum A {
         Output,
         Strict,
         Syntax,
+        Format,
         Input,
         Run,
     }
@@ -356,16 +405,26 @@ mod tests {
 
     static CLI: Cli<A> = Cli::new("demo")
         .version("1.0")
-        .about("A demo tool.\n\nIt does demo things.")
+        .before_help("demo is a demo tool.")
+        .about("It does demo things.")
+        .long_about("It does demo things.\n\nIn a long way.")
         .args(&[Pos::new(A::Input, "INPUT")
             .optional()
-            .help("The input file [default: -]")])
+            .default_value("-")
+            .value_hint(ValueHint::FilePath)
+            .help("The input file")])
         .opts(&[
             Opt::new(A::Output)
                 .short('o')
                 .long("output")
                 .value("FILE")
-                .help("Path to the output file"),
+                .help("Path to the output file")
+                .long_help("Path to the output file.\n\nAtomically written."),
+            Opt::new(A::Format)
+                .long("format")
+                .value("FORMAT")
+                .help("The format")
+                .possible_values_with_help(&[("json", "JSON"), ("yaml", "YAML")]),
             Opt::section("Template Behavior"),
             Opt::new(A::Strict)
                 .long("strict")
@@ -382,9 +441,9 @@ mod tests {
     fn test_help() {
         let _ = (A::Output, A::Strict, A::Syntax, A::Input, A::Run, R::Fast);
         assert_eq!(
-            help_text(&CLI, "demo", 60),
+            help_text(&CLI, "demo", 60, false),
             "\
-A demo tool.
+demo is a demo tool.
 
 It does demo things.
 
@@ -397,9 +456,17 @@ Arguments:
   [INPUT]  The input file [default: -]
 
 Options:
-  -o, --output <FILE>  Path to the output file
-  -h, --help           Print help
-  -V, --version        Print version
+  -o, --output <FILE>
+          Path to the output file
+
+      --format <FORMAT>
+          The format [possible values: json, yaml]
+
+  -h, --help
+          Print help
+
+  -V, --version
+          Print version
 
 Template Behavior:
       --strict         Disallow undefined variables in
@@ -410,7 +477,7 @@ Template Behavior:
                        variable-start]"
         );
         assert_eq!(
-            help_text(&RUN, "demo run", 60),
+            help_text(&RUN, "demo run", 60, false),
             "\
 Runs the thing
 with more details
@@ -420,6 +487,57 @@ Usage: demo run [OPTIONS]
 Options:
       --fast  Go fast
   -h, --help  Print help"
+        );
+    }
+
+    #[test]
+    fn test_long_help() {
+        assert_eq!(
+            help_text(&CLI, "demo", 60, true),
+            "\
+demo is a demo tool.
+
+It does demo things.
+
+In a long way.
+
+Usage: demo [OPTIONS] [INPUT] [COMMAND]
+
+Commands:
+  run  Runs the thing
+
+Arguments:
+  [INPUT]
+          The input file
+
+          [default: -]
+
+Options:
+  -o, --output <FILE>
+          Path to the output file.
+
+          Atomically written.
+
+      --format <FORMAT>
+          The format
+
+          Possible values:
+          - json: JSON
+          - yaml: YAML
+
+  -h, --help
+          Print help
+
+  -V, --version
+          Print version
+
+Template Behavior:
+      --strict
+          Disallow undefined variables in templates
+
+  -s, --syntax <PAIR>
+          Changes a syntax feature (feature=value) [possible
+          features: block-start, block-end, variable-start]"
         );
     }
 

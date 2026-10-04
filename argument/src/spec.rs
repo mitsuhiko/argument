@@ -1,4 +1,5 @@
 //! The static description of a command line interface.
+use crate::info::{CommandInfo, ValueHint};
 
 /// Describes a command line interface (or one of its subcommands).
 ///
@@ -30,8 +31,11 @@ pub struct Cli<A: 'static> {
     pub(crate) name: &'static str,
     pub(crate) version: Option<&'static str>,
     pub(crate) about: Option<&'static str>,
+    pub(crate) long_about: Option<&'static str>,
+    pub(crate) before_help: Option<&'static str>,
     pub(crate) usage: Option<&'static str>,
     pub(crate) after_help: Option<&'static str>,
+    pub(crate) max_width: Option<usize>,
     pub(crate) opts: &'static [Opt<A>],
     pub(crate) args: &'static [Pos<A>],
     pub(crate) cmds: &'static [Cmd<A>],
@@ -47,8 +51,11 @@ impl<A: 'static> Cli<A> {
             name,
             version: None,
             about: None,
+            long_about: None,
+            before_help: None,
             usage: None,
             after_help: None,
+            max_width: None,
             opts: &[],
             args: &[],
             cmds: &[],
@@ -67,6 +74,26 @@ impl<A: 'static> Cli<A> {
     /// the parent.
     pub const fn about(mut self, about: &'static str) -> Cli<A> {
         self.about = Some(about);
+        self
+    }
+
+    /// Sets the description shown at the top of the long help page.
+    ///
+    /// If not set, [`about`](Self::about) is used for the long help as well.
+    pub const fn long_about(mut self, long_about: &'static str) -> Cli<A> {
+        self.long_about = Some(long_about);
+        self
+    }
+
+    /// Text that is shown before the description on the help page.
+    pub const fn before_help(mut self, text: &'static str) -> Cli<A> {
+        self.before_help = Some(text);
+        self
+    }
+
+    /// Sets the maximum width for rendering help (defaults to `100`).
+    pub const fn max_width(mut self, width: usize) -> Cli<A> {
+        self.max_width = Some(width);
         self
     }
 
@@ -170,6 +197,10 @@ pub struct Opt<A: 'static> {
     pub(crate) value: Option<&'static str>,
     pub(crate) optional_value: bool,
     pub(crate) help: &'static str,
+    pub(crate) long_help: Option<&'static str>,
+    pub(crate) default_value: Option<&'static str>,
+    pub(crate) values: Values,
+    pub(crate) value_hint: ValueHint,
     pub(crate) hidden: bool,
 }
 
@@ -185,6 +216,10 @@ impl<A: 'static> Opt<A> {
             value: None,
             optional_value: false,
             help: "",
+            long_help: None,
+            default_value: None,
+            values: Values::None,
+            value_hint: ValueHint::Unknown,
             hidden: false,
         }
     }
@@ -201,6 +236,10 @@ impl<A: 'static> Opt<A> {
             value: None,
             optional_value: false,
             help: title,
+            long_help: None,
+            default_value: None,
+            values: Values::None,
+            value_hint: ValueHint::Unknown,
             hidden: false,
         }
     }
@@ -240,6 +279,46 @@ impl<A: 'static> Opt<A> {
         self
     }
 
+    /// Sets the long help text (shown in the long help page).
+    pub const fn long_help(mut self, text: &'static str) -> Opt<A> {
+        self.long_help = Some(text);
+        self
+    }
+
+    /// Sets the default value for display purposes.
+    ///
+    /// This does not change parsing, it only shows `[default: ...]` in the
+    /// help page.
+    pub const fn default_value(mut self, value: &'static str) -> Opt<A> {
+        self.default_value = Some(value);
+        self
+    }
+
+    /// Restricts the value to the given possible values.
+    ///
+    /// The values are validated when the value is read, shown in the help
+    /// page and used for shell completions.
+    pub const fn possible_values(mut self, values: &'static [&'static str]) -> Opt<A> {
+        self.values = Values::Plain(values);
+        self
+    }
+
+    /// Like [`possible_values`](Self::possible_values) but with a description
+    /// for each value.
+    pub const fn possible_values_with_help(
+        mut self,
+        values: &'static [(&'static str, &'static str)],
+    ) -> Opt<A> {
+        self.values = Values::Described(values);
+        self
+    }
+
+    /// Sets a hint for completing the value.
+    pub const fn value_hint(mut self, hint: ValueHint) -> Opt<A> {
+        self.value_hint = hint;
+        self
+    }
+
     /// Hides the option from the help page.
     pub const fn hidden(mut self) -> Opt<A> {
         self.hidden = true;
@@ -256,6 +335,10 @@ pub struct Pos<A: 'static> {
     pub(crate) id: A,
     pub(crate) name: &'static str,
     pub(crate) help: &'static str,
+    pub(crate) long_help: Option<&'static str>,
+    pub(crate) default_value: Option<&'static str>,
+    pub(crate) values: Values,
+    pub(crate) value_hint: ValueHint,
     pub(crate) required: bool,
     pub(crate) multiple: bool,
     pub(crate) allow_hyphen: bool,
@@ -268,6 +351,10 @@ impl<A: 'static> Pos<A> {
             id,
             name,
             help: "",
+            long_help: None,
+            default_value: None,
+            values: Values::None,
+            value_hint: ValueHint::Unknown,
             required: true,
             multiple: false,
             allow_hyphen: false,
@@ -277,6 +364,40 @@ impl<A: 'static> Pos<A> {
     /// Sets the help text.
     pub const fn help(mut self, text: &'static str) -> Pos<A> {
         self.help = text;
+        self
+    }
+
+    /// Sets the long help text (shown in the long help page).
+    pub const fn long_help(mut self, text: &'static str) -> Pos<A> {
+        self.long_help = Some(text);
+        self
+    }
+
+    /// Sets the default value for display purposes.
+    pub const fn default_value(mut self, value: &'static str) -> Pos<A> {
+        self.default_value = Some(value);
+        self
+    }
+
+    /// Restricts the value to the given possible values.
+    pub const fn possible_values(mut self, values: &'static [&'static str]) -> Pos<A> {
+        self.values = Values::Plain(values);
+        self
+    }
+
+    /// Like [`possible_values`](Self::possible_values) but with a description
+    /// for each value.
+    pub const fn possible_values_with_help(
+        mut self,
+        values: &'static [(&'static str, &'static str)],
+    ) -> Pos<A> {
+        self.values = Values::Described(values);
+        self
+    }
+
+    /// Sets a hint for completing the value.
+    pub const fn value_hint(mut self, hint: ValueHint) -> Pos<A> {
+        self.value_hint = hint;
         self
     }
 
@@ -315,18 +436,37 @@ impl<A: 'static> Pos<A> {
     }
 }
 
-pub(crate) trait CommandInfo: Sync {
-    fn name(&self) -> &'static str;
-    fn about(&self) -> Option<&'static str>;
+/// Possible values of an option or argument.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Values {
+    None,
+    Plain(&'static [&'static str]),
+    Described(&'static [(&'static str, &'static str)]),
 }
 
-impl<A: Sync + 'static> CommandInfo for Cli<A> {
-    fn name(&self) -> &'static str {
-        self.name
+impl Values {
+    pub(crate) fn is_empty(self) -> bool {
+        match self {
+            Values::None => true,
+            Values::Plain(values) => values.is_empty(),
+            Values::Described(values) => values.is_empty(),
+        }
     }
 
-    fn about(&self) -> Option<&'static str> {
-        self.about
+    pub(crate) fn contains(self, value: &str) -> bool {
+        match self {
+            Values::None => false,
+            Values::Plain(values) => values.contains(&value),
+            Values::Described(values) => values.iter().any(|x| x.0 == value),
+        }
+    }
+
+    pub(crate) fn names(self) -> Vec<&'static str> {
+        match self {
+            Values::None => Vec::new(),
+            Values::Plain(values) => values.to_vec(),
+            Values::Described(values) => values.iter().map(|x| x.0).collect(),
+        }
     }
 }
 
@@ -338,7 +478,7 @@ impl<A: Sync + 'static> CommandInfo for Cli<A> {
 /// [`Parser::subcommand`](crate::Parser::subcommand).
 pub struct Cmd<A: 'static> {
     pub(crate) id: A,
-    pub(crate) info: &'static dyn CommandInfo,
+    pub(crate) info: &'static (dyn CommandInfo + Sync),
 }
 
 impl<A: 'static> Cmd<A> {

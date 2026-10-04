@@ -7,7 +7,7 @@ use argument_parser::{Flag, FromString, Param};
 
 use crate::error::{Context, Error, ErrorKind};
 use crate::help;
-use crate::spec::{Builtin, Cli, Opt, Pos};
+use crate::spec::{Builtin, Cli, Opt, Pos, Values};
 
 /// What the parser handed out last.
 enum Last<'a, A: 'static> {
@@ -187,20 +187,26 @@ impl<'a, A: Copy + 'static> Parser<'a, A> {
 
     /// Parses the value of the current option or positional argument.
     ///
-    /// See [`argument_parser::Parser::value`].
+    /// If the spec declares possible values, the value is validated against
+    /// them.  See [`argument_parser::Parser::value`].
     pub fn value<V: FromString>(&mut self) -> Result<V, Error> {
         self.consume_value();
-        self.inner.value().map_err(|err| self.convert_error(err))
+        if self.possible_values().is_empty() {
+            return self.inner.value().map_err(|err| self.convert_error(err));
+        }
+        let value = self.raw_value_unchecked()?;
+        self.parse_checked(value)
     }
 
     /// Returns the raw value of the current option or positional argument.
     ///
-    /// See [`argument_parser::Parser::raw_value`].
+    /// If the spec declares possible values, the value is validated against
+    /// them.  See [`argument_parser::Parser::raw_value`].
     pub fn raw_value(&mut self) -> Result<OsString, Error> {
         self.consume_value();
-        self.inner
-            .raw_value()
-            .map_err(|err| self.convert_error(err))
+        let value = self.raw_value_unchecked()?;
+        self.check_possible_value(&value)?;
+        Ok(value)
     }
 
     /// Parses an optional attached value (`--opt=value` or `-ovalue`).
@@ -208,17 +214,30 @@ impl<'a, A: Copy + 'static> Parser<'a, A> {
     /// See [`argument_parser::Parser::optional_value`].
     pub fn optional_value<V: FromString>(&mut self) -> Result<Option<V>, Error> {
         self.consume_value();
-        self.inner
-            .optional_value()
-            .map_err(|err| self.convert_error(err))
+        if self.possible_values().is_empty() {
+            return self
+                .inner
+                .optional_value()
+                .map_err(|err| self.convert_error(err));
+        }
+        match self.inner.optional_raw_value() {
+            Some(value) => self.parse_checked(value).map(Some),
+            None => Ok(None),
+        }
     }
 
     /// Returns an optional attached raw value.
     ///
     /// See [`argument_parser::Parser::optional_raw_value`].
-    pub fn optional_raw_value(&mut self) -> Option<OsString> {
+    pub fn optional_raw_value(&mut self) -> Result<Option<OsString>, Error> {
         self.consume_value();
-        self.inner.optional_raw_value()
+        match self.inner.optional_raw_value() {
+            Some(value) => {
+                self.check_possible_value(&value)?;
+                Ok(Some(value))
+            }
+            None => Ok(None),
+        }
     }
 
     /// Checks if the parser looks at something that is not an option.
@@ -273,9 +292,17 @@ impl<'a, A: Copy + 'static> Parser<'a, A> {
         help::usage(self.cli, &self.prog)
     }
 
-    /// Renders the help page.
+    /// Renders the (short) help page.
     pub fn help_text(&self) -> String {
-        help::help_text(self.cli, &self.prog, help::terminal_width())
+        help::help_text(self.cli, &self.prog, help::render_width(self.cli), false)
+    }
+
+    /// Renders the long help page.
+    ///
+    /// The long help uses [`Cli::long_about`] and the long help texts of
+    /// options and arguments where available.
+    pub fn long_help_text(&self) -> String {
+        help::help_text(self.cli, &self.prog, help::render_width(self.cli), true)
     }
 
     /// Creates a help "error".
@@ -284,6 +311,13 @@ impl<'a, A: Copy + 'static> Parser<'a, A> {
     /// with [`Cli::run`] or [`Error::exit`].
     pub fn help(&self) -> Error {
         Error::with_kind(ErrorKind::Help, self.help_text())
+    }
+
+    /// Creates a long help "error".
+    ///
+    /// Like [`help`](Self::help) but renders the long help page.
+    pub fn long_help(&self) -> Error {
+        Error::with_kind(ErrorKind::Help, self.long_help_text())
     }
 
     /// Creates a custom error that includes usage information.
@@ -485,6 +519,51 @@ impl<'a, A: Copy + 'static> Parser<'a, A> {
                 }
             }
         }
+    }
+
+    fn possible_values(&self) -> Values {
+        match self.last {
+            Last::Opt(opt, _) => opt.values,
+            Last::Pos(pos) => pos.values,
+            Last::Nothing | Last::Cmd => Values::None,
+        }
+    }
+
+    fn raw_value_unchecked(&mut self) -> Result<OsString, Error> {
+        self.inner
+            .raw_value()
+            .map_err(|err| self.convert_error(err))
+    }
+
+    fn check_possible_value(&self, value: &OsStr) -> Result<(), Error> {
+        let values = self.possible_values();
+        if values.is_empty() || value.to_str().is_some_and(|x| values.contains(x)) {
+            return Ok(());
+        }
+        let value = value.to_string_lossy();
+        let names = values.names();
+        let tip = match help::suggest(&value, names.iter().copied()) {
+            Some(similar) => format!("a similar value exists: '{}'", similar),
+            None => format!("possible values: {}", names.join(", ")),
+        };
+        Err(self.with_context(
+            Error::with_kind(
+                ErrorKind::InvalidValue,
+                format!(
+                    "invalid value '{}' for '{}'",
+                    value,
+                    self.last.describe().unwrap_or_default()
+                ),
+            )
+            .with_tip(Some(tip)),
+        ))
+    }
+
+    fn parse_checked<V: FromString>(&self, value: OsString) -> Result<V, Error> {
+        self.check_possible_value(&value)?;
+        // possible values are valid unicode, so this cannot fail
+        let value = value.into_string().unwrap_or_default();
+        V::from_string(value).map_err(|err| self.convert_error(err))
     }
 
     fn builtin(&self, builtin: Builtin) -> Error {
