@@ -3,6 +3,7 @@ name = "argument"
 description = "a not yet published argument parsing library. Mail me if you have questions."
 version = { workspace = true }
 edition = { workspace = true }
+rust-version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
 homepage = { workspace = true }

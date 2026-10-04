@@ -8,7 +8,9 @@ NEW_VERSION="${1}"
 
 echo "Bumping version: ${NEW_VERSION}"
 perl -pi -e "s/\bargument v.*? /argument v$NEW_VERSION /" README.md
-perl -pi -e "s/^version = \".*?\"/version = \"$NEW_VERSION\"/" argument/Cargo.toml
-perl -pi -e "s/^version = \".*?\"/version = \"$NEW_VERSION\"/" argument-*/Cargo.toml
+# workspace package version
+perl -pi -e "s/^version = \".*?\"/version = \"$NEW_VERSION\"/" Cargo.toml
+# pinned versions of the workspace dependencies
+perl -pi -e "s/^(argument[a-z-]* = \{ version = \"=)[^\"]*\"/\${1}$NEW_VERSION\"/" Cargo.toml
 
 cargo check --all

@@ -4,6 +4,7 @@ members = ["argument", "argument-*"]
 
 [workspace.package]
 edition = "2021"
+rust-version = "1.74"
 version = "0.0.1"
 homepage = "https://github.com/mitsuhiko/argument"
 repository = "https://github.com/mitsuhiko/argument"
@@ -11,4 +12,4 @@ authors = ["Armin Ronacher <armin.ronacher@active-4.com>"]
 license = "Apache-2.0"
 
 [workspace.dependencies]
-argument-parser = { path = "argument-parser" }
+argument-parser = { version = "=0.0.1", path = "argument-parser" }

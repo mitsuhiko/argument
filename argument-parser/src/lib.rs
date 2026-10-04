@@ -757,7 +757,7 @@ impl<'it> Parser<'it> {
         arg_bytes.len() > 1
             && arg_bytes.first() == Some(&b'-')
             && (!self.get_flag(Flag::DisableNumericOptions)
-                || arg_bytes.get(1).is_none_or(|x| !x.is_ascii_digit()))
+                || arg_bytes.get(1).map_or(true, |x| !x.is_ascii_digit()))
     }
 
     /// Attach the name of the current parameter to the error if needed.
@@ -776,21 +776,15 @@ impl<'it> Parser<'it> {
 /// It has a blanket implementation for all types that implement [`FromStr`]
 /// that have a an error that is compatible with [`std::error::Error`].  This
 /// also implements a no-op conversion from [`String`] to [`String`].
-#[diagnostic::on_unimplemented(
-    message = "`FromString` is not implemented for `{Self}` (because `FromStr` is not implemented for `{Self}`)",
-    label = "a compatible trait implementation of `FromStr` does not exist for `{Self}`",
-    note = "`FromString` is implemented for most types that implement `FromStr` (on the condition that `Err` is `std::error::Error` compatible)",
-    note = "common implementations can be found in the documentation: https://doc.rust-lang.org/std/str/trait.FromStr.html#implementors"
-)]
 pub trait FromString: Sized {
     /// Parse a value from an owned string.
     fn from_string(s: String) -> Result<Self, Error>;
 }
 
-#[diagnostic::do_not_recommend]
 impl<T> FromString for T
 where
-    T: FromStr<Err: Into<BoxedStdError>> + 'static,
+    T: FromStr + 'static,
+    T::Err: Into<BoxedStdError>,
 {
     fn from_string(s: String) -> Result<T, Error> {
         // SAFETY: we can make a fast path here if we know the value is a string
