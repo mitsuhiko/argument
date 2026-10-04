@@ -121,6 +121,11 @@
 //! This crate makes a best effort at error reporting, but higher level abstractions
 //! should be used to improve the user experience.  Error messages might indicate
 //! the wrong parameters if raw argument parsing is used.
+// `diagnostic::do_not_recommend` is only understood by Rust 1.85 and later.
+// Older compilers warn about unknown diagnostic attributes, and the lint
+// cannot be silenced on the item itself.
+#![allow(unknown_or_malformed_diagnostic_attributes)]
+
 use std::error::Error as _;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
@@ -776,11 +781,18 @@ impl<'it> Parser<'it> {
 /// It has a blanket implementation for all types that implement [`FromStr`]
 /// that have a an error that is compatible with [`std::error::Error`].  This
 /// also implements a no-op conversion from [`String`] to [`String`].
+#[diagnostic::on_unimplemented(
+    message = "`FromString` is not implemented for `{Self}` (because `FromStr` is not implemented for `{Self}`)",
+    label = "a compatible trait implementation of `FromStr` does not exist for `{Self}`",
+    note = "`FromString` is implemented for most types that implement `FromStr` (on the condition that `Err` is `std::error::Error` compatible)",
+    note = "common implementations can be found in the documentation: https://doc.rust-lang.org/std/str/trait.FromStr.html#implementors"
+)]
 pub trait FromString: Sized {
     /// Parse a value from an owned string.
     fn from_string(s: String) -> Result<Self, Error>;
 }
 
+#[diagnostic::do_not_recommend]
 impl<T> FromString for T
 where
     T: FromStr + 'static,
