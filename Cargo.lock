@@ -10,5 +10,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "argument-completions"
+version = "0.0.1"
+dependencies = [
+ "argument",
+]
+
+[[package]]
 name = "argument-parser"
 version = "0.0.1"

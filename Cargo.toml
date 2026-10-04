@@ -12,4 +12,5 @@ authors = ["Armin Ronacher <armin.ronacher@active-4.com>"]
 license = "Apache-2.0"
 
 [workspace.dependencies]
+argument = { version = "=0.0.1", path = "argument" }
 argument-parser = { version = "=0.0.1", path = "argument-parser" }
