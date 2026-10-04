@@ -106,6 +106,7 @@ mod error;
 mod help;
 mod parser;
 mod spec;
+mod term;
 
 pub use argument_parser::{Flag, FromString};
 

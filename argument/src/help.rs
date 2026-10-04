@@ -10,10 +10,16 @@ const MAX_LEFT_COLUMN: usize = 30;
 /// Indentation of help texts in the two-line layout.
 const NEXT_LINE_INDENT: usize = 10;
 
+/// The width used for rendering help pages.
+///
+/// An explicit `COLUMNS` environment variable wins over the detected terminal
+/// width.  The result is clamped to keep help pages readable.
 pub(crate) fn terminal_width() -> usize {
     std::env::var("COLUMNS")
         .ok()
         .and_then(|x| x.parse::<usize>().ok())
+        .filter(|&x| x > 0)
+        .or_else(crate::term::terminal_width)
         .unwrap_or(80)
         .clamp(40, 100)
 }
