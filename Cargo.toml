@@ -3,13 +3,9 @@ resolver = "2"
 members = ["argument", "argument-*"]
 
 [workspace.package]
+version = "0.0.1"
 edition = "2021"
 rust-version = "1.78"
-version = "0.0.1"
-homepage = "https://github.com/mitsuhiko/argument"
-repository = "https://github.com/mitsuhiko/argument"
-authors = ["Armin Ronacher <armin.ronacher@active-4.com>"]
-license = "Apache-2.0"
 
 [workspace.dependencies]
 argument = { version = "=0.0.1", path = "argument" }

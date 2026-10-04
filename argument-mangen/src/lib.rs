@@ -407,3 +407,8 @@ impl Roff {
         }
     }
 }
+
+// the examples of the readme are tested
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;

@@ -1,13 +1,16 @@
 [package]
 name = "argument"
-description = "a not yet published argument parsing library. Mail me if you have questions."
-version = { workspace = true }
-edition = { workspace = true }
-rust-version = { workspace = true }
-authors = { workspace = true }
-license = { workspace = true }
-homepage = { workspace = true }
-repository = { workspace = true }
+authors = ["Armin Ronacher <armin.ronacher@active-4.com>"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "A small command line interface library with help pages, built on argument-parser"
+repository = "https://github.com/mitsuhiko/argument"
+keywords = ["cli", "argument", "parser", "help", "command-line"]
+categories = ["command-line-interface"]
+readme = "README.md"
+license = "Apache-2.0"
+documentation = "https://docs.rs/argument"
 
 [dependencies]
-argument-parser = { workspace = true }
+argument-parser.workspace = true

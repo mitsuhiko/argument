@@ -2,7 +2,8 @@
 
 `argument-parser` is a crate that implements an argument parser for command
 lines following POSIX conventions.  It's dead simple, dependency free and is
-built so you can drive your own parsing.
+built so you can drive your own parsing.  For help pages and errors on top of
+it, use [argument](https://github.com/mitsuhiko/argument/tree/main/argument).
 
 The goal of this crate is that it's stable, excellently tested and requires
 little updates and maintenance.  You can use it and it keeps working.
@@ -95,14 +96,3 @@ raised if it is not.  This intentional design choice makes handling command
 lines easier and more portable.  While `lexopt` would handle broken Unicode like
 `foo -a�` by producing a parameter named `�`, `argument-parser` will issue a
 Unicode error.  However, invalid Unicode is permissible in option arguments.
-
-## Sponsor
-
-If you like the project and find it useful you can [become a
-sponsor](https://github.com/sponsors/mitsuhiko).
-
-## License and Links
-
-- License: [Apache-2.0](https://github.com/mitsuhiko/argument/blob/main/LICENSE)
-- [Discussions](https://github.com/mitsuhiko/argument/discussions)
-- [Issue Tracker](https://github.com/mitsuhiko/argument/issues)

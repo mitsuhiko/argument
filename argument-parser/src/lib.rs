@@ -854,3 +854,8 @@ fn os_string_into_string(s: OsString) -> Result<String, Error> {
     s.into_string()
         .map_err(|s| Error::new(ErrorKind::InvalidUnicode).with_os_string(s))
 }
+
+// the examples of the readme are tested
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;

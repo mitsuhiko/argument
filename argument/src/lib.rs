@@ -115,3 +115,8 @@ pub use crate::error::{Error, ErrorKind};
 pub use crate::info::{ArgumentInfo, CommandInfo, OptionInfo, PossibleValue, ValueHint};
 pub use crate::parser::Parser;
 pub use crate::spec::{Cli, Cmd, Opt, Pos};
+
+// the examples of the readme are tested
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;

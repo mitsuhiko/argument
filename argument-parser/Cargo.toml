@@ -1,12 +1,13 @@
 [package]
 name = "argument-parser"
-description = "a not yet published argument parsing library. Mail me if you have questions."
-version = { workspace = true }
-edition = { workspace = true }
-rust-version = { workspace = true }
-authors = { workspace = true }
-license = { workspace = true }
-homepage = { workspace = true }
-repository = { workspace = true }
-
-[dependencies]
+authors = ["Armin Ronacher <armin.ronacher@active-4.com>"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "A low-level, dependency free command line parser following POSIX conventions"
+repository = "https://github.com/mitsuhiko/argument"
+keywords = ["cli", "argument", "parser", "getopt", "posix"]
+categories = ["command-line-interface", "parser-implementations"]
+readme = "README.md"
+license = "Apache-2.0"
+documentation = "https://docs.rs/argument-parser"

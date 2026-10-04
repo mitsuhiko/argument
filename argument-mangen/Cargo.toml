@@ -1,14 +1,16 @@
 [package]
 name = "argument-mangen"
-description = "Man page generation for argument based command line interfaces."
+authors = ["Armin Ronacher <armin.ronacher@active-4.com>"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Man page generation for the argument crate"
+repository = "https://github.com/mitsuhiko/argument"
+keywords = ["cli", "man", "manpage", "roff", "documentation"]
+categories = ["command-line-interface"]
 readme = "README.md"
-version = { workspace = true }
-edition = { workspace = true }
-rust-version = { workspace = true }
-authors = { workspace = true }
-license = { workspace = true }
-homepage = { workspace = true }
-repository = { workspace = true }
+license = "Apache-2.0"
+documentation = "https://docs.rs/argument-mangen"
 
 [dependencies]
-argument = { workspace = true }
+argument.workspace = true
